@@ -1,5 +1,3 @@
-import copy
-
 from collections import defaultdict, OrderedDict
 import numpy as np
 from sortedcontainers import SortedListWithKey
@@ -58,10 +56,20 @@ class ConstraintHypothesis:
         sequence = []
         current_hyp = self
         while current_hyp.backpointer is not None:
-            sequence.append((current_hyp.token, current_hyp.constraint_index))
+            sequence.append(current_hyp.token)
             current_hyp = current_hyp.backpointer
-        sequence.append((current_hyp.token, current_hyp.constraint_index))
+        sequence.append(current_hyp.token)
         return sequence[::-1]
+
+    @property
+    def constraint_index_sequence(self):
+        constraint_sequence = []
+        current_hyp = self
+        while current_hyp.backpointer is not None:
+            constraint_sequence.append(current_hyp.constraint_index)
+            current_hyp = current_hyp.backpointer
+        constraint_sequence.append((current_hyp.token, current_hyp.constraint_index))
+        return constraint_sequence[::-1]
 
     def constraint_candidates(self):
         available_constraints = []
