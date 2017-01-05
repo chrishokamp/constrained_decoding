@@ -68,7 +68,7 @@ class ConstraintHypothesis:
         while current_hyp.backpointer is not None:
             constraint_sequence.append(current_hyp.constraint_index)
             current_hyp = current_hyp.backpointer
-        constraint_sequence.append((current_hyp.token, current_hyp.constraint_index))
+        constraint_sequence.append(current_hyp.constraint_index)
         return constraint_sequence[::-1]
 
     def constraint_candidates(self):

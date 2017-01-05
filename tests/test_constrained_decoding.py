@@ -14,6 +14,9 @@ class DumbTranslationModel(AbstractConstrainedTM):
     def __init__(self, vocabulary):
         self.vocabulary = vocabulary
 
+    def start_hypothesis(self, *args, **kwargs):
+        raise NotImplementedError
+
     def generate(self, hyp, n_best=1):
         # make k_best random hyp objects
         next_tokens = np.random.choice(self.vocabulary, size=n_best)
@@ -136,32 +139,47 @@ class TestConstrainedHypothesis(unittest.TestCase):
                                         backpointer=self.start_hyp,
                                         unfinished_constraint=False)
 
-        seq = next_hyp.sequence
-        print(seq)
+        # test that hypotheses correctly output their sequences
+        token_seq = next_hyp.sequence
         true_seq = [0, 1]
-        self.assertTrue(len(seq) == 2)
-        self.assertTrue(all(true_sym == seq_sym for true_sym, seq_sym in zip(true_seq, seq)))
+        self.assertTrue(len(token_seq) == 2)
+        self.assertTrue(all(true_sym == seq_sym
+                            for true_sym, seq_sym in zip(true_seq, token_seq)))
 
+        constraint_idx_seq = next_hyp.constraint_index_sequence
+        true_seq = [None, None]
+        self.assertTrue(len(constraint_idx_seq) == 2)
+        self.assertTrue(all(true_sym == seq_sym
+                            for true_sym, seq_sym in zip(true_seq, constraint_idx_seq)))
 
-    def test_string_representation(self):
-        pass
+    def test_constraint_indices(self):
+        next_symbol = 1
+        next_coverage = [
+            [1, 0],
+            [0, 0, 0]
+        ]
+        constraint_index = (0, 0)
+        next_hyp = ConstraintHypothesis(token=next_symbol,
+                                        score=1.0,
+                                        coverage=next_coverage,
+                                        constraints=self.start_hyp.constraints,
+                                        constraint_index=constraint_index,
+                                        payload=None,
+                                        backpointer=self.start_hyp,
+                                        unfinished_constraint=False)
 
-
-
+        # test that hypotheses correctly output their sequences
+        constraint_idx_seq = next_hyp.constraint_index_sequence
+        true_seq = [None, constraint_index]
+        self.assertTrue(len(constraint_idx_seq) == 2)
+        self.assertTrue(all(true_sym == seq_sym
+                            for true_sym, seq_sym in zip(true_seq, constraint_idx_seq)))
 
 
 class TestConstrainedDecoder(unittest.TestCase):
 
     def setUp(self):
-        self.vocabulary = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-
-        self.sample_constraints = [
-            [1, 2],
-            [5, 6, 7]
-        ]
-
-    def test_constrained_hypothesis(self):
-        self.assertTrue(True)
+        pass
 
 
 class TestTranslationModel(unittest.TestCase):
