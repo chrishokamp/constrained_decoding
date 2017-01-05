@@ -9,6 +9,11 @@ class AbstractConstrainedTM:
         pass
 
     @abstractmethod
+    def start_hypothesis(self, *args, **kwargs):
+        """Produce the initial hypothesis of this model"""
+        pass
+
+    @abstractmethod
     def generate(self, hyp, n_best=1):
         """Generate from the TM output vocabulary using the translation hypothesis"""
         pass
