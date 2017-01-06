@@ -80,11 +80,15 @@ class ConstraintHypothesis:
         return available_constraints
 
 
-class AbstractBeam(object):
+class Beam(object):
 
-    def __init__(self, size):
-        # note: here we assume bigger scores are better
-        self.hypotheses = SortedListWithKey(key=lambda x: -x['score'])
+    def __init__(self, size, lower_better=True):
+        # are bigger scores better or worse?
+        if lower_better:
+            self.hypotheses = SortedListWithKey(key=lambda x: x['score'])
+        else:
+            self.hypotheses = SortedListWithKey(key=lambda x: -x['score'])
+
         self.size = size
 
     def add(self, hyp):
@@ -103,10 +107,11 @@ class AbstractBeam(object):
 
 # FUNCTIONS USED BY THE CONSTRAINED DECODER
 # Note: hyps on the top level may be finished (End with EOS), or may be continuing (haven't gotten an EOS yet)
+# Note: because of the way we create new Beams, we would need to wrap the Beam class to access the `lower_better` kwarg
 class ConstrainedDecoder(object):
 
     def __init__(self, hyp_generation_func, constraint_generation_func, continue_constraint_func,
-                 beam_implementation=AbstractBeam):
+                 beam_implementation=Beam):
         self.hyp_generation_func = hyp_generation_func
         self.constraint_generation_func = constraint_generation_func
         self.continue_constraint_func = continue_constraint_func
@@ -114,11 +119,12 @@ class ConstrainedDecoder(object):
 
     # IMPLEMENTATION QUESTION: are mid-constraint hyps allowed to fall off of the beam or not?
     def search(self, start_hyp, constraints, max_source_len, beam_size=10):
-        """create a constrained search
+        """Perform a constrained search
             - fill the search grid
         """
 
         # the total number of constraint tokens determines the height of the grid
+        # TODO: the total grid height should be +1 because the first row has no constraints
         grid_height = sum(len(c) for c in constraints)
 
         search_grid = OrderedDict()
@@ -129,7 +135,7 @@ class ConstrainedDecoder(object):
 
         search_grid[(0, 0)] = start_beam
 
-        current_beam_count = 0
+        current_beam_count = 1
         for i in range(1, max_source_len + 1):
             print('TIME: {}'.format(i+1))
             j_start = max(i - (max_source_len - grid_height), 0)
@@ -142,7 +148,7 @@ class ConstrainedDecoder(object):
                 # generate hyps from (i-1, j-1), and (i-1, j), and add them to the beam
                 # cell to the left generates
                 if (i-1, j) in search_grid:
-                    generation_hyps = self.get_generation_hyps(search_grid[(i-1, j)])
+                    generation_hyps = self.get_generation_hyps(search_grid[(i-1, j)], beam_size)
                     for hyp in generation_hyps:
                         new_beam.add(hyp)
                 # lower left diagonal cell adds hyps from constraints
@@ -157,19 +163,22 @@ class ConstrainedDecoder(object):
                 search_grid[(i,j)] = new_beam
                 print('index: {}'.format((i,j)))
 
+            print(beams_in_i)
+            print(current_beam_count)
+            print(len(search_grid))
             current_beam_count += beams_in_i
             assert len(search_grid) == current_beam_count, 'total grid size must be correct after adding new column'
 
         return search_grid
 
-    def get_generation_hyps(self, beam):
+    def get_generation_hyps(self, beam, beam_size=1):
         """return all hyps which are continuations of the hyps on this beam
 
         hyp_generation_func maps `(hyp) --> continuations`
           - the coverage vector of the parent hyp is not modified in each child
         """
 
-        continuations = (self.hyp_generation_func(hyp) for hyp in beam if not hyp.unfinished_constraint)
+        continuations = (self.hyp_generation_func(hyp, beam_size) for hyp in beam if not hyp.unfinished_constraint)
 
         # flatten
         return (new_hyp for hyp_list in continuations for new_hyp in hyp_list)
