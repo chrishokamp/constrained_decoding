@@ -30,6 +30,8 @@ class ConstraintHypothesis:
 
     def __init__(self, token, score, coverage, constraints, payload=None, backpointer=None,
                  constraint_index=None, unfinished_constraint=False):
+        if type(token) == str:
+            token = token.decode('utf8')
         self.token = token
         self.score = score
 
@@ -80,6 +82,27 @@ class ConstraintHypothesis:
         return available_constraints
 
 
+# Beam Constraints: Functions which specify True/False checks that need to pass for a hyp to be added to the beam
+def unfinished(hyp, eos=u'</S>'):
+    if hyp.token == eos:
+        return False
+    return True
+
+
+def eos_covers_constraints(hyp, eos=u'</S>'):
+    constraints_remaining = True
+    coverage = hyp.coverage
+    if sum(covered for cons in coverage for covered in cons) == sum(len(c) for c in coverage):
+        constraints_remaining = False
+    is_eos = False
+    if hyp.token == eos:
+        is_eos = True
+
+    if constraints_remaining and is_eos:
+        return False
+    return True
+
+
 class Beam(object):
 
     def __init__(self, size, lower_better=True):
@@ -91,11 +114,12 @@ class Beam(object):
 
         self.size = size
 
-    def add(self, hyp):
-        self.hypotheses.add(hyp)
-        if len(self.hypotheses) > self.size:
-            assert len(self.hypotheses) == self.size + 1
-            del self.hypotheses[-1]
+    def add(self, hyp, beam_constraints=[]):
+        if all(check(hyp) for check in beam_constraints):
+            self.hypotheses.add(hyp)
+            if len(self.hypotheses) > self.size:
+                assert len(self.hypotheses) == self.size + 1
+                del self.hypotheses[-1]
 
     def __len__(self):
         return len(self.hypotheses)
@@ -117,7 +141,11 @@ class ConstrainedDecoder(object):
         self.continue_constraint_func = continue_constraint_func
         self.beam_implementation = beam_implementation
 
+        # TODO: allow user-specified beam_constraints
+        self.beam_constraints = [eos_covers_constraints]
+
     # IMPLEMENTATION QUESTION: are mid-constraint hyps allowed to fall off of the beam or not?
+    # WORKING: add beam constraints, i.e. cannot gen EOS before all constraints covered
     def search(self, start_hyp, constraints, max_source_len, beam_size=10):
         """Perform a constrained search
             - fill the search grid
@@ -137,7 +165,6 @@ class ConstrainedDecoder(object):
 
         current_beam_count = 1
         for i in range(1, max_source_len + 1):
-            print('TIME: {}'.format(i+1))
             j_start = max(i - (max_source_len - grid_height), 0)
             j_end = min(i, grid_height) + 1
             beams_in_i = j_end - j_start
@@ -150,7 +177,7 @@ class ConstrainedDecoder(object):
                 if (i-1, j) in search_grid:
                     generation_hyps = self.get_generation_hyps(search_grid[(i-1, j)], beam_size)
                     for hyp in generation_hyps:
-                        new_beam.add(hyp)
+                        new_beam.add(hyp, beam_constraints=self.beam_constraints)
                 # lower left diagonal cell adds hyps from constraints
                 if (i-1, j-1) in search_grid:
                     new_constraint_hyps = self.get_new_constraint_hyps(search_grid[(i-1, j-1)])
@@ -161,11 +188,7 @@ class ConstrainedDecoder(object):
                         new_beam.add(hyp)
 
                 search_grid[(i,j)] = new_beam
-                print('index: {}'.format((i,j)))
 
-            print(beams_in_i)
-            print(current_beam_count)
-            print(len(search_grid))
             current_beam_count += beams_in_i
             assert len(search_grid) == current_beam_count, 'total grid size must be correct after adding new column'
 
