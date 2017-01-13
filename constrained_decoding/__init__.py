@@ -145,8 +145,7 @@ class ConstrainedDecoder(object):
         self.beam_constraints = [eos_covers_constraints]
 
     # IMPLEMENTATION QUESTION: are mid-constraint hyps allowed to fall off of the beam or not?
-    # WORKING: add beam constraints, i.e. cannot gen EOS before all constraints covered
-    def search(self, start_hyp, constraints, max_source_len, beam_size=10):
+    def search(self, start_hyp, constraints, max_hyp_len, beam_size=10):
         """Perform a constrained search
             - fill the search grid
         """
@@ -164,8 +163,8 @@ class ConstrainedDecoder(object):
         search_grid[(0, 0)] = start_beam
 
         current_beam_count = 1
-        for i in range(1, max_source_len + 1):
-            j_start = max(i - (max_source_len - grid_height), 0)
+        for i in range(1, max_hyp_len + 1):
+            j_start = max(i - (max_hyp_len - grid_height), 0)
             j_end = min(i, grid_height) + 1
             beams_in_i = j_end - j_start
 
