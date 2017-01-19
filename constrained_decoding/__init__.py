@@ -229,3 +229,30 @@ class ConstrainedDecoder(object):
 
         return continuations
 
+    @staticmethod
+    def best_n(search_grid, eos_token, n_best=1):
+        top_row = max(k[1] for k in search_grid.keys())
+
+        if top_row > 1:
+            output_beams = [search_grid[k] for k in search_grid.keys() if k[1] == top_row]
+        else:
+            # constraints seq is empty
+            # Note this is a very hackish way to get the last beam
+            output_beams = [search_grid[search_grid.keys()[-1]]]
+
+        output_hyps = [h for beam in output_beams for h in beam]
+
+        # getting the true length of each hypothesis
+        true_lens = [h.sequence.index(eos_token) if eos_token in h.sequence else len(h.sequence)
+                     for h in output_hyps]
+        true_lens = [float(l) for l in true_lens]
+
+        output_seqs = [(h.sequence, h.score / true_len) for h, true_len in zip(output_hyps, true_lens)]
+        output_seqs = sorted(output_seqs, key=lambda x: x[1])
+
+        if n_best > 1:
+            return output_seqs[:n_best]
+        else:
+            return output_seqs[0]
+
+

@@ -8,6 +8,7 @@ from .. import ConstraintHypothesis
 from nn_imt import IMTPredictor
 from neural_mt.machine_translation.configurations import get_config
 
+
 class NeuralTranslationModel(AbstractConstrainedTM):
 
     def __init__(self, config_file):
