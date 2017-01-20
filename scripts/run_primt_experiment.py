@@ -10,16 +10,21 @@ Constraint selection method
 Saved Model to use
 
 """
+from __future__ import print_function
 
 import logging
 import argparse
 import codecs
 import itertools
 import errno
-import cPickle
+import json
+import shutil
+import time
+import re
 import os
 from collections import Counter
 from multiprocessing import Process, Queue
+from subprocess import Popen, PIPE
 
 import numpy as np
 
@@ -30,6 +35,72 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+
+BLEU_SCRIPT = '/home/chris/projects/neural_mt/test_data/sample_experiment/tiny_demo_dataset/multi-bleu.perl'
+
+def compute_bleu_score(hyp_file, ref_file):
+    multibleu_cmd = ['perl', BLEU_SCRIPT, ref_file, '<']
+    mb_subprocess = Popen(multibleu_cmd, stdin=PIPE, stdout=PIPE)
+    with codecs.open(hyp_file, encoding='utf8') as hyps:
+        for l in hyps.read().strip().split('\n'):
+            # send the line to the BLEU script
+            print(l.encode('utf8'), file=mb_subprocess.stdin)
+            mb_subprocess.stdin.flush()
+
+    # send end of file, read output.
+    mb_subprocess.stdin.close()
+    stdout = mb_subprocess.stdout.readline()
+    logger.info(stdout)
+    out_parse = re.match(r'BLEU = [-.0-9]+', stdout)
+    assert out_parse is not None
+
+    # extract the score
+    bleu_score = float(out_parse.group()[6:])
+    logger.info('BLEU SCORE: {}'.format(bleu_score))
+    mb_subprocess.terminate()
+    return bleu_score
+
+
+def get_max_ref_constraint(hyp, ref, max_constraint_cutoff=3):
+    ref_constraints = []
+    hyp_toks = set(hyp)
+
+    current_sub_seq = []
+    for tok in ref:
+        if not tok in hyp_toks:
+            current_sub_seq.append(tok)
+        else:
+            if len(current_sub_seq) > 0:
+                ref_constraints.append(current_sub_seq)
+                current_sub_seq = []
+    if len(current_sub_seq) > 0:
+        ref_constraints.append(current_sub_seq)
+
+    longest_constraint_idx = 0
+    len_longest = 0
+    for c_i, c in enumerate(ref_constraints):
+        if len(c) > len_longest:
+            len_longest = len(c)
+            longest_constraint_idx = c_i
+
+    if len(ref_constraints) > 0:
+        longest_constraint = ref_constraints[longest_constraint_idx][:max_constraint_cutoff]
+    else:
+        longest_constraint = []
+
+    return (ref_constraints, longest_constraint)
+
+
+def create_constraints(hyp_file, ref_file, max_constraint_cutoff=3):
+    with codecs.open(hyp_file, encoding='utf8') as hyp_input:
+        with codecs.open(ref_file, encoding='utf8') as ref_input:
+            hyps = [l.split() for l in hyp_input.read().strip().split('\n')]
+            refs = [l.split() for l in ref_input.read().strip().split('\n')]
+    assert len(hyps) == len(refs), u'We need the same number of hyps and refs'
+
+    constraint_lists, longest_constraints = zip(*[get_max_ref_constraint(hyp, ref, max_constraint_cutoff)
+                                                  for hyp, ref in zip(hyps, refs)])
+    return longest_constraints
 
 
 def create_constrained_decoder(translation_model):
@@ -75,7 +146,7 @@ def translate_with_model(config_file, pid, input_queue, output_queue, length_fac
 
 
 # def translate_with_model(config_file, pid, input_queue, output_queue, length_factor=1.5, verbose=True):
-def main(source_file, target_file, config_file, output_dir, constraints=None, num_parallel=1):
+def run_primt_cycle(source_file, target_file, config_file, output_dir, cycle_idx, constraints, num_parallel=1):
 
     # input and output queues used by the processes
     input_queue = Queue()
@@ -125,13 +196,33 @@ def main(source_file, target_file, config_file, output_dir, constraints=None, nu
 
     logger.info('Translating file: {}'.format(source_file))
 
-    # TODO: fix constraints to be real ones
-    fake_constraints = [[] for _ in range(len(open(source_file).read().strip().split('\n')))]
-    num_seqs_to_translate, source_sens, target_sens = _send_jobs(source_file, target_file, fake_constraints)
+    num_seqs_to_translate, source_sens, target_sens = _send_jobs(source_file, target_file, constraints)
     _finish_processes()
 
-    for i, trans in enumerate(_retrieve_jobs(num_seqs_to_translate)):
-        import ipdb;ipdb.set_trace()
+    mkdir_p(output_dir)
+    output_file_name = os.path.join(output_dir, 'primt.translations.{}'.format(cycle_idx))
+    # overwrite older version
+    open(output_file_name, 'w')
+
+    # TODO: also write constraints so the experiment can be redone without decoding again
+    output_translations = []
+    for i, (trans, score) in enumerate(_retrieve_jobs(num_seqs_to_translate)):
+        # TODO: hide trimming of the 'None' at the beginning of each translation within search or decoder
+        trans = trans[1:]
+
+        # Note hardcoded </S> for cutoff
+        if u'</S>' in trans:
+            trimmed_trans = trans[:trans.index(u'</S>')]
+        else:
+            trimmed_trans = trans
+        output_translations.append((trans, score))
+        with codecs.open(output_file_name, 'a', encoding='utf8') as out:
+            out.write(u' '.join(trimmed_trans)  + u'\n')
+
+        if i % 50 == 0:
+            logger.info('Wrote {} lines to {}'.format(i+1, output_file_name))
+
+    return output_file_name
 
 
 def mkdir_p(path):
@@ -152,10 +243,6 @@ def parallel_iterator(source_file, target_file):
 
 
 
-# create models
-# for model in models
-# start model, pass as arg to the function which is the target of the Process
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -175,16 +262,55 @@ if __name__ == "__main__":
 
     num_procs = 10
 
-    main(args.source, args.target, args.config, args.outputdir, num_parallel=args.parallel)
 
+    score_file = os.path.join(args.outputdir, 'iteration_scores.BLEU')
+
+    # overwrite old version if it exists
+    if os.path.exists(score_file):
+        logger.warn('{} already exists, moving to: {}'.format(score_file, score_file + '.old'))
+        shutil.copyfile(score_file, score_file + '.old')
+        open(score_file, 'w')
+
+    # start with nothing
+    all_cycle_constraints = [[] for _ in codecs.open(args.source).read().strip().split('\n')]
+
+    for cycle_idx in range(args.numcycles):
+        logger.info('Running PRIMT cycle: {}'.format(cycle_idx))
+        primt_output_file = run_primt_cycle(args.source, args.target, args.config, args.outputdir, cycle_idx,
+                                            all_cycle_constraints, num_parallel=args.parallel)
+
+        cycle_constraints = create_constraints(primt_output_file, args.target)
+        # add these constraints for the next cycle
+        for cons_i, cons in enumerate(cycle_constraints):
+            # Note if we add empty constraints decoding will break
+            if len(cons) > 0:
+                all_cycle_constraints[cons_i].append(cons)
+
+        cycle_bleu = compute_bleu_score(primt_output_file, args.target)
+        logger.info("CYCLE: {} BLEU: {}".format(cycle_idx, cycle_bleu))
+        with codecs.open(score_file, 'a', encoding='utf8') as scores:
+            scores.write("CYCLE: {} BLEU: {}".format(cycle_idx, cycle_bleu))
+
+        with codecs.open(os.path.join(args.outputdir, 'cycle_constraints.{}.json'.format(cycle_idx)),
+                         'w', encoding='utf8') as cons_out:
+            cons_out.write(json.dumps(cycle_constraints, indent=2))
+
+    import ipdb;ipdb.set_trace()
+
+    # TODO: fix constraints to be real ones
+    # fake_constraints = [[] for _ in range(len(open(source_file).read().strip().split('\n')))]
+
+    # TODO: add a sanity check that hyps and refs have the same number of lines, and no refs or hyps are empty
+    # get gold refs
+
+
+    # compute BLEU and write to experiment log
+    # with codecs.open(os.path.join(score_file, 'a')) as out:
+
+    # WORKING: get output, extract constraints, then go again
     logger.info('Finished translating {0} with constraints'.format(args.source))
     # logger.info('Files in {}: {}'.format(args.outputdir, os.listdir(args.outputdir)))
 
 
-
-
-
-
-
-
-
+    # logger.info("Validation Took: {} minutes".format(
+    #     float(time.time() - val_start_time) / 60.))
