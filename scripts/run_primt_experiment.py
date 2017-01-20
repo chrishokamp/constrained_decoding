@@ -293,24 +293,10 @@ if __name__ == "__main__":
 
         with codecs.open(os.path.join(args.outputdir, 'cycle_constraints.{}.json'.format(cycle_idx)),
                          'w', encoding='utf8') as cons_out:
-            cons_out.write(json.dumps(cycle_constraints, indent=2))
+            cons_out.write(json.dumps(all_cycle_constraints, indent=2))
 
-    import ipdb;ipdb.set_trace()
-
-    # TODO: fix constraints to be real ones
-    # fake_constraints = [[] for _ in range(len(open(source_file).read().strip().split('\n')))]
-
-    # TODO: add a sanity check that hyps and refs have the same number of lines, and no refs or hyps are empty
-    # get gold refs
-
-
-    # compute BLEU and write to experiment log
-    # with codecs.open(os.path.join(score_file, 'a')) as out:
-
-    # WORKING: get output, extract constraints, then go again
     logger.info('Finished translating {0} with constraints'.format(args.source))
-    # logger.info('Files in {}: {}'.format(args.outputdir, os.listdir(args.outputdir)))
-
 
     # logger.info("Validation Took: {} minutes".format(
     #     float(time.time() - val_start_time) / 60.))
+
