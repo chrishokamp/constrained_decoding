@@ -247,7 +247,13 @@ class ConstrainedDecoder(object):
                      for h in output_hyps]
         true_lens = [float(l) for l in true_lens]
 
-        output_seqs = [(h.sequence, h.score / true_len) for h, true_len in zip(output_hyps, true_lens)]
+        try:
+            output_seqs = [(h.sequence, h.score / true_len) for h, true_len in zip(output_hyps, true_lens)]
+        except:
+            # Note: this happens when there is actually no output, just a None
+            #import ipdb;ipdb.set_trace()
+            output_seqs = [([eos_token], 0.0)]
+
         output_seqs = sorted(output_seqs, key=lambda x: x[1])
 
         if n_best > 1:

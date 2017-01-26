@@ -35,8 +35,8 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-
-BLEU_SCRIPT = '/home/chris/projects/neural_mt/test_data/sample_experiment/tiny_demo_dataset/multi-bleu.perl'
+# TODO: move this to arg
+BLEU_SCRIPT = '/home/chokamp/projects/neural_mt/test_data/sample_experiment/tiny_demo_dataset/multi-bleu.perl'
 
 def compute_bleu_score(hyp_file, ref_file):
     multibleu_cmd = ['perl', BLEU_SCRIPT, ref_file, '<']
@@ -116,7 +116,7 @@ def create_translation_model(config_file):
     return ntm
 
 
-def decode_input(ntm, decoder, source, constraints):
+def decode_input(ntm, decoder, source, constraints, length_factor=1.3):
     # TODO: this is a hack until we remove the target_prefix completely from the graph
     target_prefix = u'<S>'.split()
     target_prefix_ = ntm.imt_model.map_idx_or_unk(target_prefix,
@@ -145,12 +145,12 @@ def run_primt_cycle(source_file, target_file, config_file, output_dir, cycle_idx
     # input and output queues used by the processes
     source_seqs = []
     target_seqs = []
-    with codecs.open(src_file, encoding='utf8') as source_inp:
-        with codecs.open(trg_file, encoding='utf8') as target_inp:
+    with codecs.open(source_file, encoding='utf8') as source_inp:
+        with codecs.open(target_file, encoding='utf8') as target_inp:
             for line_idx, (src_l, trg_l, cons) \
-                    in enumerate(itertools.izip(source_inp, target_inp, target_constraints)):
-                src = src_l.split()
-                trg = trg_l.split()
+                    in enumerate(itertools.izip(source_inp, target_inp, constraints)):
+                src = src_l.strip().split()
+                trg = trg_l.strip().split()
 
                 source_seqs.append(src)
                 target_seqs.append(trg)
@@ -160,12 +160,14 @@ def run_primt_cycle(source_file, target_file, config_file, output_dir, cycle_idx
 
     mkdir_p(output_dir)
     output_file_name = os.path.join(output_dir, 'primt.translations.{}'.format(cycle_idx))
-    # overwrite older version if it exists
-    open(output_file_name, 'w')
+    if os.path.exists(output_file_name):
+        return output_file_name
+        # overwrite older version if it exists
+        # open(output_file_name, 'w')
 
     # Note: we also write constraints so the experiment can be redone without decoding again
     output_translations = []
-    for source, constraint in zip(source_seqs, constraints):
+    for i, (source, constraint) in enumerate(zip(source_seqs, constraints)):
         trans, score = decode_input(ntm, decoder, source, constraint)
         # hides trimming of the 'None' at the beginning of each translation within search or decoder
         trans = trans[1:]
