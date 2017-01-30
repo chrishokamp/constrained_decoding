@@ -237,7 +237,7 @@ if __name__ == "__main__":
         cycle_bleu = compute_bleu_score(primt_output_file, args.target)
         logger.info("CYCLE: {} BLEU: {}".format(cycle_idx, cycle_bleu))
         with codecs.open(score_file, 'a', encoding='utf8') as scores:
-            scores.write("CYCLE: {} BLEU: {}".format(cycle_idx, cycle_bleu))
+            scores.write("CYCLE: {} BLEU: {}\n".format(cycle_idx, cycle_bleu))
 
         with codecs.open(os.path.join(args.outputdir, 'cycle_constraints.{}.json'.format(cycle_idx)),
                          'w', encoding='utf8') as cons_out:
