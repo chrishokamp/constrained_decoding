@@ -93,7 +93,7 @@ def get_max_ref_constraint(hyp, ref, max_constraint_cutoff=3, ref_vocab=None):
         try:
             assert all(w in ref_vocab for w in longest_constraint)
         except:
-            import ipdb; ipdb.set_trace()
+            raise ValueError('if a constraint is not in the index, theres a problem')
 
 
     return (ref_constraints, longest_constraint)
@@ -169,7 +169,7 @@ def run_primt_cycle(source_file, target_file, config_file, output_dir, cycle_idx
     mkdir_p(output_dir)
     output_file_name = os.path.join(output_dir, 'primt.translations.{}'.format(cycle_idx))
     if os.path.exists(output_file_name):
-        return output_file_name
+        return output_file_name, ntm
         # overwrite older version if it exists
         # open(output_file_name, 'w')
 
