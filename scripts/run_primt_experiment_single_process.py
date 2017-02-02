@@ -61,6 +61,49 @@ def compute_bleu_score(hyp_file, ref_file):
     return bleu_score
 
 
+# WORKING: add different ways of getting constraints from the reference
+def get_max_ref_start_constraint(hyp, ref, max_constraint_cutoff=3, ref_vocab=None):
+    ref_constraints = []
+    hyp_toks = set(hyp)
+
+    # get constraints bounded by unknown toks on either side
+    current_sub_seq = []
+    sub_seq_counter = 0
+    for tok in ref:
+        if not tok in hyp_toks or (sub_seq_counter > 0 and sub_seq_counter <= max_constraint_cutoff):
+            current_sub_seq.append(tok)
+            sub_seq_counter += 1
+        else:
+            if len(current_sub_seq) > 0:
+                ref_constraints.append(current_sub_seq)
+                current_sub_seq = []
+                sub_seq_counter = 0
+    if len(current_sub_seq) > 0:
+        ref_constraints.append(current_sub_seq)
+
+    longest_constraint_idx = 0
+    len_longest = 0
+    for c_i, c in enumerate(ref_constraints):
+        if len(c) > len_longest:
+            len_longest = len(c)
+            longest_constraint_idx = c_i
+
+    if len(ref_constraints) > 0:
+        longest_constraint = ref_constraints[longest_constraint_idx][:max_constraint_cutoff]
+    else:
+        longest_constraint = []
+
+    # Sanity: assert that the model knows about this constraint
+    if ref_vocab is not None:
+        for constraint_i in ref_constraints:
+            try:
+                assert all(w in ref_vocab for w in constraint_i)
+            except:
+                raise ValueError('if a constraint is not in the index, theres a problem')
+
+    return (ref_constraints, longest_constraint)
+
+
 def get_max_ref_constraint(hyp, ref, max_constraint_cutoff=3, ref_vocab=None):
     ref_constraints = []
     hyp_toks = set(hyp)
@@ -90,23 +133,24 @@ def get_max_ref_constraint(hyp, ref, max_constraint_cutoff=3, ref_vocab=None):
 
     # Sanity: assert that the model knows about this constraint
     if ref_vocab is not None:
-        try:
-            assert all(w in ref_vocab for w in longest_constraint)
-        except:
-            raise ValueError('if a constraint is not in the index, theres a problem')
-
+        for constraint_i in ref_constraints:
+            try:
+                assert all(w in ref_vocab for w in constraint_i)
+            except:
+                raise ValueError('if a constraint is not in the index, theres a problem')
 
     return (ref_constraints, longest_constraint)
 
 
-def create_constraints(hyp_file, ref_file, max_constraint_cutoff=3, ref_vocab=None):
+def create_constraints(hyp_file, ref_file, constraint_gen_func, max_constraint_cutoff=3, ref_vocab=None):
     with codecs.open(hyp_file, encoding='utf8') as hyp_input:
         with codecs.open(ref_file, encoding='utf8') as ref_input:
             hyps = [l.split() for l in hyp_input.read().strip().split('\n')]
             refs = [l.split() for l in ref_input.read().strip().split('\n')]
     assert len(hyps) == len(refs), u'We need the same number of hyps and refs'
 
-    constraint_lists, longest_constraints = zip(*[get_max_ref_constraint(hyp, ref, max_constraint_cutoff, ref_vocab=ref_vocab)
+    constraint_lists, longest_constraints = zip(*[constraint_gen_func(hyp, ref, max_constraint_cutoff,
+                                                                      ref_vocab=ref_vocab)
                                                   for hyp, ref in zip(hyps, refs)])
     return longest_constraints
 
@@ -216,6 +260,8 @@ if __name__ == "__main__":
                         help="the directory where we should write the output files and the experiment report")
     parser.add_argument("-nc", "--numcycles", type=int,
                         help="the number of PRIMT cycles to perform")
+    parser.add_argument("--strict_constraints", type=bool, default=True,
+                        help="whether all reference words must be missing to build a new constraint")
 
     args = parser.parse_args()
     arg_dict = vars(args)
@@ -228,6 +274,12 @@ if __name__ == "__main__":
         shutil.copyfile(score_file, score_file + '.old')
         open(score_file, 'w')
 
+    if args.strict_constraints:
+        constraint_gen_func = get_max_ref_constraint
+    else:
+        constraint_gen_func = get_max_ref_start_constraint
+    logger.info('Strict generation of constraints is: {}'.format(args.strict_constraints))
+
     # start with nothing
     all_cycle_constraints = [[] for _ in codecs.open(args.source).read().strip().split('\n')]
 
@@ -236,7 +288,9 @@ if __name__ == "__main__":
         primt_output_file, tm = run_primt_cycle(args.source, args.target, args.config, args.outputdir, cycle_idx,
                                                 all_cycle_constraints)
 
-        cycle_constraints = create_constraints(primt_output_file, args.target, ref_vocab=tm.imt_model.trg_vocab)
+        cycle_constraints = create_constraints(primt_output_file, args.target, constraint_gen_func=constraint_gen_func,
+                                               ref_vocab=tm.imt_model.trg_vocab)
+
         # add these constraints for the next cycle
         for cons_i, cons in enumerate(cycle_constraints):
             # Note if we add empty constraints decoding will break

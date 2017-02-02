@@ -249,6 +249,11 @@ class ConstrainedDecoder(object):
                      for h in output_hyps]
         true_lens = [float(l) for l in true_lens]
 
+        # if at least one hyp ends with eos, drop all the ones that don't
+        eos_hyps = [h for h in output_hyps if eos_token in h.sequence]
+        if len(eos_hyps) > 0:
+            output_hyps = eos_hyps
+
         try:
             output_seqs = [(h.sequence, h.score / true_len) for h, true_len in zip(output_hyps, true_lens)]
         except:
