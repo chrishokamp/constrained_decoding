@@ -61,7 +61,7 @@ def compute_bleu_score(hyp_file, ref_file):
     return bleu_score
 
 
-def get_max_ref_constraint(hyp, ref, max_constraint_cutoff=3):
+def get_max_ref_constraint(hyp, ref, max_constraint_cutoff=3, ref_vocab=None):
     ref_constraints = []
     hyp_toks = set(hyp)
 
@@ -88,17 +88,25 @@ def get_max_ref_constraint(hyp, ref, max_constraint_cutoff=3):
     else:
         longest_constraint = []
 
+    # Sanity: assert that the model knows about this constraint
+    if ref_vocab is not None:
+        try:
+            assert all(w in ref_vocab for w in longest_constraint)
+        except:
+            import ipdb; ipdb.set_trace()
+
+
     return (ref_constraints, longest_constraint)
 
 
-def create_constraints(hyp_file, ref_file, max_constraint_cutoff=3):
+def create_constraints(hyp_file, ref_file, max_constraint_cutoff=3, ref_vocab=None):
     with codecs.open(hyp_file, encoding='utf8') as hyp_input:
         with codecs.open(ref_file, encoding='utf8') as ref_input:
             hyps = [l.split() for l in hyp_input.read().strip().split('\n')]
             refs = [l.split() for l in ref_input.read().strip().split('\n')]
     assert len(hyps) == len(refs), u'We need the same number of hyps and refs'
 
-    constraint_lists, longest_constraints = zip(*[get_max_ref_constraint(hyp, ref, max_constraint_cutoff)
+    constraint_lists, longest_constraints = zip(*[get_max_ref_constraint(hyp, ref, max_constraint_cutoff, ref_vocab=ref_vocab)
                                                   for hyp, ref in zip(hyps, refs)])
     return longest_constraints
 
@@ -184,7 +192,7 @@ def run_primt_cycle(source_file, target_file, config_file, output_dir, cycle_idx
         if i % 50 == 0:
             logger.info('Wrote {} lines to {}'.format(i+1, output_file_name))
 
-    return output_file_name
+    return output_file_name, ntm
 
 
 def mkdir_p(path):
@@ -208,6 +216,7 @@ if __name__ == "__main__":
                         help="the directory where we should write the output files and the experiment report")
     parser.add_argument("-nc", "--numcycles", type=int,
                         help="the number of PRIMT cycles to perform")
+
     args = parser.parse_args()
     arg_dict = vars(args)
 
@@ -224,10 +233,10 @@ if __name__ == "__main__":
 
     for cycle_idx in range(args.numcycles):
         logger.info('Running PRIMT cycle: {}'.format(cycle_idx))
-        primt_output_file = run_primt_cycle(args.source, args.target, args.config, args.outputdir, cycle_idx,
-                                            all_cycle_constraints)
+        primt_output_file, tm = run_primt_cycle(args.source, args.target, args.config, args.outputdir, cycle_idx,
+                                                all_cycle_constraints)
 
-        cycle_constraints = create_constraints(primt_output_file, args.target)
+        cycle_constraints = create_constraints(primt_output_file, args.target, ref_vocab=tm.imt_model.trg_vocab)
         # add these constraints for the next cycle
         for cons_i, cons in enumerate(cycle_constraints):
             # Note if we add empty constraints decoding will break
