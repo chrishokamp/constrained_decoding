@@ -174,6 +174,7 @@ if __name__ == "__main__":
 
 
     # filter the map to only pairs which are likely to be good
+    # TODO: these should be hyperparams
     min_occs = args.min_occs
     min_score = 0.95
     min_source_len = 5
