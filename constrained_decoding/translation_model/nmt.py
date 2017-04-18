@@ -24,7 +24,6 @@ class NeuralTranslationModel(AbstractConstrainedTM):
 
     def build_input_representations(self, source_tokens, constraint_token_seqs):
         """Encode the input sequences using the source and target word-->idx maps"""
-        # TODO: add tokenization, subword encoding
 
         source_seq = self.imt_model.map_idx_or_unk(source_tokens,
                                                    self.imt_model.src_vocab,
@@ -96,7 +95,7 @@ class NeuralTranslationModel(AbstractConstrainedTM):
 
         """
 
-        # if we already generated EOS, theres only one option -- just continue it and copy the cost
+        # if we already generated EOS, there's only one option -- just continue it and copy the cost
         if hyp.token == self.eos_token:
             new_hyp = ConstraintHypothesis(
                 token=self.eos_token,
@@ -148,7 +147,6 @@ class NeuralTranslationModel(AbstractConstrainedTM):
 
 # [(k, start_hyp.payload['input_values'][k].shape) for k in start_hyp.payload['input_values'].keys()]
 # [(sampling_input, (1, 6)), (sampling_target_prefix, (1, 2))]
-
 
         # Now we need to tile the previous hyp values to make this work
         next_states = self.imt_beam_search.compute_next_states(tiled_payload['input_values'],

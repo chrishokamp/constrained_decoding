@@ -8,6 +8,7 @@ class AbstractConstrainedTM:
     def __init__(self):
         pass
 
+    # TODO: standardize interface to start_hypothesis
     @abstractmethod
     def start_hypothesis(self, *args, **kwargs):
         """Produce the initial hypothesis of this model"""

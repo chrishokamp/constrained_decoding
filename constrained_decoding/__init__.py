@@ -83,6 +83,7 @@ class ConstraintHypothesis:
 
 
 # Beam Constraints: Functions which specify True/False checks that need to pass for a hyp to be added to the beam
+# TODO: move this into the `filter` API
 def unfinished(hyp, eos=u'</S>'):
     if hyp.token == eos:
         return False
