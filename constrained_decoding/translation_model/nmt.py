@@ -12,7 +12,9 @@ from neural_mt.machine_translation.configurations import get_config
 class NeuralTranslationModel(AbstractConstrainedTM):
 
     def __init__(self, config_file):
-        """Intitialize the model according to user provided configuration
+        """
+        Intitialize the model according to user provided configuration. This Constrained Translation model uses the
+        Interactive Neural Machine Translation model interface.
 
         - follow the style of BeamSearch, but remove the search logic
         - build the graph and load the parameters (i.e. create a Predictor and expose the right functions)
@@ -53,8 +55,8 @@ class NeuralTranslationModel(AbstractConstrainedTM):
 
         """
 
-        # TODO: there SHOULD BE no self.target_sampling_input because we don't use the prefix representation in constrained
-        # input_values = {:class:`~theano.Variable`: :class:`~numpy.ndarray`}
+        # Note: there should actually be no self.target_sampling_input
+        # Note: because we don't use the prefix representation in constrained decoding
         input_values = {
             self.imt_model.source_sampling_input: source_seq,
             self.imt_model.target_sampling_input: target_prefix
@@ -126,27 +128,15 @@ class NeuralTranslationModel(AbstractConstrainedTM):
         tiled_payload['contexts']['attended'] = np.tile(payload['contexts']['attended'], (1, n_best, 1))
         tiled_payload['contexts']['attended_mask'] = np.tile(payload['contexts']['attended_mask'], (1, n_best))
 
-#         [(k, start_hyp.payload['contexts'][k].shape) for k in start_hyp.payload['contexts'].keys()]
-#         [('attended', (6, 1, 2000)), ('attended_mask', (6, 1))]
-
         tiled_payload['states']['outputs'] = np.tile(payload['states']['outputs'], n_best)
         tiled_payload['states']['states'] = np.tile(payload['states']['states'], (n_best, 1))
         tiled_payload['states']['weights'] = np.tile(payload['states']['weights'], (n_best, 1))
         tiled_payload['states']['weighted_averages'] = np.tile(payload['states']['weighted_averages'], (n_best, 1))
 
-# [(k, start_hyp.payload['states'][k].shape) for k in start_hyp.payload['states'].keys()]
-# [('outputs', (1,)),
-#  ('states', (1, 1000)),
-#  ('weights', (1, 6)),
-#  ('weighted_averages', (1, 2000))]
-
         tiled_payload['input_values'][self.imt_model.source_sampling_input] = np.tile(payload['input_values'][self.imt_model.source_sampling_input],
                                                                                       (n_best, 1))
         tiled_payload['input_values'][self.imt_model.target_sampling_input] = np.tile(payload['input_values'][self.imt_model.target_sampling_input],
                                                                                       (n_best, 1))
-
-# [(k, start_hyp.payload['input_values'][k].shape) for k in start_hyp.payload['input_values'].keys()]
-# [(sampling_input, (1, 6)), (sampling_target_prefix, (1, 2))]
 
         # Now we need to tile the previous hyp values to make this work
         next_states = self.imt_beam_search.compute_next_states(tiled_payload['input_values'],
@@ -164,11 +154,6 @@ class NeuralTranslationModel(AbstractConstrainedTM):
             new_payload['states']['states'] = np.atleast_2d(next_states['states'][hyp_idx])
             new_payload['states']['weights'] = np.atleast_2d(next_states['weights'][hyp_idx])
             new_payload['states']['weighted_averages'] = np.atleast_2d(next_states['weighted_averages'][hyp_idx])
-# [('outputs', (1,)),
-#  ('states', (1, 1000)),
-#  ('weights', (1, 6)),
-#  ('weighted_averages', (1, 2000))]
-
 
             new_payload['input_values'] = hyp.payload['input_values']
 
@@ -193,33 +178,6 @@ class NeuralTranslationModel(AbstractConstrainedTM):
             new_hyps.append(new_hyp)
 
         return new_hyps
-
-
-        # The additional dim (`None`) is needed to maintain 2d, and to
-        # make the broadcasting of `logprobs * all_masks[-1, :, None] work
-#         next_costs = (all_costs[-1, :, None] +
-#                       logprobs * all_masks[-1, :, None])
-#         (finished,) = numpy.where(all_masks[-1] == 0)
-
-        # WORKING: see if we can generate one timestep from start hyp
-
-        # we always start from the beginning of the sequence, so we always need initial states
-        # the initial states and contexts are the payload of the "start_hyp"
-        # states['outputs']
-        # states['weights']
-
-        # This array will store all generated outputs, including those from
-        # previous step and those from already finished sequences.
-        #all_outputs = states['outputs'][None, :]
-        #all_masks = numpy.ones_like(all_outputs, dtype=config.floatX)
-        #all_costs = numpy.zeros_like(all_outputs, dtype=config.floatX)
-
-        # Chris: get the glimpse weights as well
-        #prev_glimpses = states['weights'][None, :]
-        #all_glimpses = numpy.zeros_like(prev_glimpses, dtype=config.floatX)
-
-        # Note: confidence at timestep zero is always = 1
-        #all_confidences = numpy.ones_like(all_outputs, dtype=config.floatX)
 
     def generate_constrained(self, hyp):
         """Use hyp.constraints and hyp.coverage to return new hypothesis which start constraints
@@ -251,7 +209,6 @@ class NeuralTranslationModel(AbstractConstrainedTM):
             new_payload['states'] = next_states
 
             new_payload['input_values'] = hyp.payload['input_values']
-
 
             # get the score for this token from the logprobs
             if hyp.score is not None:
@@ -285,12 +242,11 @@ class NeuralTranslationModel(AbstractConstrainedTM):
     def continue_constrained(self, hyp):
         assert hyp.unfinished_constraint is True, 'hyp must be part of an unfinished constraint'
 
-        # TODO: if the model knows about constraints, getting the score from the model must be done differently
-        # TODO: currently, according to the model, there is no difference between generating and choosing from constraints
+        # Note: if the model knows about constraints, getting the score from the model must be done differently
+        # Note: according to this model, there is no difference between generating and choosing from constraints
         logprobs = self.imt_beam_search.compute_logprobs(hyp.payload['input_values'],
                                                          hyp.payload['contexts'],
                                                          hyp.payload['states']).flatten()
-
 
         constraint_row_index = hyp.constraint_index[0]
         # the index of the next token in the constraint
