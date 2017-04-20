@@ -73,7 +73,7 @@ class NematusTranslationModel(AbstractConstrainedTM):
             self.fs_next.append(f_next)
 
         # Make sure all output dicts have the same number of items
-        assert len(set(len(d['output_dict'] for d in self.word_dicts))) == 1, 'Output vocabularies must be identical'
+        assert len(set(len(d['output_dict']) for d in self.word_dicts)) == 1, 'Output vocabularies must be identical'
 
     @staticmethod
     def load_dictionaries(dictionary_files, n_words_src=None):
