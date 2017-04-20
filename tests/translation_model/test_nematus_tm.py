@@ -87,9 +87,8 @@ class TestNematusTM(unittest.TestCase):
     def test_start_hypothesis(self):
         test_input = u'A sample English sentence'
         mapped_input = self.test_tm.map_inputs([test_input])
-
         constraint_1 = u'Ein langweiliger'.split()
-        test_constraints = [constraint_1]
+        test_constraints = self.test_tm.map_constraints([constraint_1])
 
         start_hyp = self.test_tm.start_hypothesis(mapped_input, test_constraints)
 
@@ -97,10 +96,10 @@ class TestNematusTM(unittest.TestCase):
         self.assertTrue(len(start_hyp.payload['next_states']) == 1)
 
     def test_generate(self):
-        test_input = u'A sample English sentence'
+        test_input = u'a sample English sentence'
         mapped_input = self.test_tm.map_inputs([test_input])
         constraint_1 = u'Ein langweiliger'.split()
-        test_constraints = [constraint_1]
+        test_constraints = self.test_tm.map_constraints([constraint_1])
         start_hyp = self.test_tm.start_hypothesis(mapped_input, test_constraints)
 
         nbest = 5
@@ -110,8 +109,15 @@ class TestNematusTM(unittest.TestCase):
         self.assertTrue(len(set(hyp.token for hyp in next_hyps)) == nbest)
 
     def test_generate_constrained(self):
-        # WORKING HERE
-        pass
+        test_input = u'A sample English sentence'
+        mapped_input = self.test_tm.map_inputs([test_input])
+        constraint_1 = u'Ein langweiliger'.split()
+        test_constraints = self.test_tm.map_constraints([constraint_1])
+        start_hyp = self.test_tm.start_hypothesis(mapped_input, test_constraints)
+
+        next_hyps = self.test_tm.generate_constrained(start_hyp)
+        self.assertTrue(len(next_hyps) == 1)
+        self.assertTrue(next_hyps[0].token == constraint_1[0])
 
 
     def test_continue_constrained(self):

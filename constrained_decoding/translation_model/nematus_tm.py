@@ -227,14 +227,13 @@ class NematusTranslationModel(AbstractConstrainedTM):
 
         return start_hyp
 
-    # Note: that our current implementation cannot take advantage of any batching
     def generate(self, hyp, n_best):
         """
         Generate the `n_best` hypotheses starting with `hyp`
 
         """
 
-        # if we already generated EOS, there's only one option -- just continue it and copy the cost
+        # if we already generated EOS, there's only one option -- just continue it and copy the current cost
         if hyp.token == self.eos_token:
             new_hyp = ConstraintHypothesis(
                 token=self.eos_token,
@@ -272,7 +271,6 @@ class NematusTranslationModel(AbstractConstrainedTM):
         next_hyps = []
         # create a new hypothesis for each of the n-best
         for token_idx, score in zip(n_best_idxs, n_best_scores):
-            # TODO: account for EOS continuations -- i.e. make other costs infinite
             if hyp.score is not None:
                 next_score = hyp.score + score
             else:
@@ -308,10 +306,63 @@ class NematusTranslationModel(AbstractConstrainedTM):
         """
         assert hyp.unfinished_constraint is not True, 'hyp must not be part of an unfinished constraint'
 
+
+        next_states = [None] * self.num_models
+        next_p = [None] * self.num_models
+
+        for i in xrange(self.num_models):
+            # Note: batch size is implicitly = 1
+            inps = [hyp.payload['next_w'], hyp.payload['contexts'][i], hyp.payload['next_states'][i]]
+            ret = self.fs_next[i](*inps)
+            next_p[i], next_w_tmp, next_states[i] = ret[0], ret[1], ret[2]
+
+            #if return_alignment:
+            #    dec_alphas[i] = ret[3]
+
+            #if suppress_unk:
+            #    next_p[i][:,1] = -numpy.inf
+
+        # now compute the combined scores
+        weighted_scores, probs = self.combine_model_scores(next_p)
+        flat_scores = weighted_scores.flatten()
+
         new_constraint_hyps = []
         available_constraints = hyp.constraint_candidates()
+        for idx in available_constraints:
+            constraint_idx = hyp.constraints[idx][0]
+            constraint_score = flat_scores[constraint_idx]
+            if hyp.score is not None:
+                next_score = hyp.score + constraint_score
+            else:
+                # hyp.score is None for the start hyp
+                next_score = constraint_score
 
-        pass
+            coverage = copy.deepcopy(hyp.coverage)
+            coverage[idx][0] = 1
+
+            if len(coverage[idx]) > 1:
+                unfinished_constraint = True
+            else:
+                unfinished_constraint = False
+
+            payload = {
+                'next_states': next_states,
+                'contexts': hyp.payload['contexts'],
+                'next_w': constraint_idx
+            }
+
+            # TODO: if the model knows about constraints, getting the score from the model must be done differently
+            new_hyp = ConstraintHypothesis(token=self.word_dicts[0]['output_idict'][constraint_idx],
+                                           score=next_score,
+                                           coverage=coverage,
+                                           constraints=hyp.constraints,
+                                           payload=payload,
+                                           backpointer=hyp,
+                                           constraint_index=(idx, 0),
+                                           unfinished_constraint=unfinished_constraint)
+            new_constraint_hyps.append(new_hyp)
+
+        return new_constraint_hyps
 
     def continue_constrained(self, hyp):
         pass
