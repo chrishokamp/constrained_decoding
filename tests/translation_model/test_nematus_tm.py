@@ -97,9 +97,25 @@ class TestNematusTM(unittest.TestCase):
         self.assertTrue(len(start_hyp.payload['next_states']) == 1)
 
     def test_generate(self):
+        test_input = u'A sample English sentence'
+        mapped_input = self.test_tm.map_inputs([test_input])
+        constraint_1 = u'Ein langweiliger'.split()
+        test_constraints = [constraint_1]
+        start_hyp = self.test_tm.start_hypothesis(mapped_input, test_constraints)
+
+        nbest = 5
+        next_hyps = self.test_tm.generate(start_hyp, nbest)
+        self.assertTrue(len(next_hyps) == nbest)
+        # assert each hyp generated a different symbol
+        self.assertTrue(len(set(hyp.token for hyp in next_hyps)) == nbest)
+
+    def test_generate_constrained(self):
+        # WORKING HERE
         pass
 
 
+    def test_continue_constrained(self):
+        pass
 
 
 if __name__ == '__main__':

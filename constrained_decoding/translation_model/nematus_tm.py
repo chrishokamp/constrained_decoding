@@ -2,6 +2,8 @@
 Implements AbstractConstrainedTM for Nematus NMT models
 """
 
+import copy
+
 import numpy
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 from theano import shared
@@ -36,11 +38,7 @@ class NematusTranslationModel(AbstractConstrainedTM):
         # don't use noise
         use_noise = shared(numpy.float32(0.))
 
-        if model_weights is None:
-            self.model_weights = numpy.ones(len(model_files))
-        else:
-            assert len(model_weights) == len(model_files), 'if you specify weights, there must be one per model'
-            self.model_weights = model_weights
+        self.eos_token = u'eos'
 
         self.fs_init = []
         self.fs_next = []
@@ -74,7 +72,15 @@ class NematusTranslationModel(AbstractConstrainedTM):
 
         # Make sure all output dicts have the same number of items
         assert len(set(len(d['output_dict']) for d in self.word_dicts)) == 1, 'Output vocabularies must be identical'
+
         self.num_models = len(self.fs_init)
+
+        if model_weights is None:
+            self.model_weights = numpy.ones(len(model_files))
+        else:
+            assert len(model_weights) == len(model_files), 'if you specify weights, there must be one per model'
+            self.model_weights = model_weights
+
 
     @staticmethod
     def load_dictionaries(dictionary_files, n_words_src=None):
@@ -221,51 +227,107 @@ class NematusTranslationModel(AbstractConstrainedTM):
 
         return start_hyp
 
-        # WORKING: call f_init for every model and add output to the payload
-        # WORKING: note -1 as BOS token idx
-        # get initial state of decoder rnn and encoder context
-        #for i in xrange(num_models):
-        #    ret = f_init[i](x)
-        #    next_state[i] = numpy.tile( ret[0] , (live_k,1))
-        #    ctx0[i] = ret[1]
-        #next_w = -1 * numpy.ones((live_k,)).astype('int64')  # bos indicator
-
-        ## x is a sequence of word ids followed by 0, eos id
-        #for ii in xrange(maxlen):
-        #    for i in xrange(num_models):
-        #        ctx = numpy.tile(ctx0[i], [live_k, 1])
-        #        inps = [next_w, ctx, next_state[i]]
-        #        ret = f_next[i](*inps)
-        #        # dimension of dec_alpha (k-beam-size, number-of-input-hidden-units)
-        #        next_p[i], next_w_tmp, next_state[i] = ret[0], ret[1], ret[2]
-        #        if return_alignment:
-        #            dec_alphas[i] = ret[3]
-
-        #    if suppress_unk:
-        #        next_p[i][:,1] = -numpy.inf
-
     # Note: that our current implementation cannot take advantage of any batching
-    def generate(self, hyp, n_best=1):
-        #for i in xrange(self.num_models):
-        #    # Note: batch size is 1
-        #    ctx = numpy.tile(contexts[i], [1, 1])
-        #    inps = [next_w, ctx, next_states[i]]
-        #    ret = f_next[i](*inps)
-        #    # dimension of dec_alpha (k-beam-size, number-of-input-hidden-units)
-        #    next_p[i], next_w_tmp, next_state[i] = ret[0], ret[1], ret[2]
-        #    if return_alignment:
-        #        dec_alphas[i] = ret[3]
+    def generate(self, hyp, n_best):
+        """
+        Generate the `n_best` hypotheses starting with `hyp`
 
-        #    if suppress_unk:
-        #         next_p[i][:,1] = -numpy.inf
+        """
 
-        pass
+        # if we already generated EOS, there's only one option -- just continue it and copy the cost
+        if hyp.token == self.eos_token:
+            new_hyp = ConstraintHypothesis(
+                token=self.eos_token,
+                score=hyp.score,
+                coverage=copy.deepcopy(hyp.coverage),
+                constraints=hyp.constraints,
+                payload=hyp.payload,
+                backpointer=hyp,
+                constraint_index=None,
+                unfinished_constraint=False
+            )
+            return [new_hyp]
+
+        next_states = [None] * self.num_models
+        next_p = [None] * self.num_models
+
+        for i in xrange(self.num_models):
+            # Note: batch size is implicitly = 1
+            inps = [hyp.payload['next_w'], hyp.payload['contexts'][i], hyp.payload['next_states'][i]]
+            ret = self.fs_next[i](*inps)
+            next_p[i], next_w_tmp, next_states[i] = ret[0], ret[1], ret[2]
+
+            #if return_alignment:
+            #    dec_alphas[i] = ret[3]
+
+            #if suppress_unk:
+            #    next_p[i][:,1] = -numpy.inf
+
+        # now compute the combined scores
+        weighted_scores, probs = self.combine_model_scores(next_p)
+
+        n_best_idxs = numpy.argsort(weighted_scores.flatten())[:n_best]
+        n_best_scores = weighted_scores.flatten()[n_best_idxs]
+
+        next_hyps = []
+        # create a new hypothesis for each of the n-best
+        for token_idx, score in zip(n_best_idxs, n_best_scores):
+            # TODO: account for EOS continuations -- i.e. make other costs infinite
+            if hyp.score is not None:
+                next_score = hyp.score + score
+            else:
+                # hyp.score is None for the start hyp
+                next_score = score
+
+            payload = {
+                'next_states': next_states,
+                'contexts': hyp.payload['contexts'],
+                'next_w': token_idx
+            }
+
+            new_hyp = ConstraintHypothesis(
+                token=self.word_dicts[0]['output_idict'][token_idx],
+                score=next_score,
+                coverage=copy.deepcopy(hyp.coverage),
+                constraints=hyp.constraints,
+                payload=payload,
+                backpointer=hyp,
+                constraint_index=None,
+                unfinished_constraint=False
+            )
+
+            next_hyps.append(new_hyp)
+
+        return next_hyps
 
     def generate_constrained(self, hyp):
+        """
+        Use hyp.constraints and hyp.coverage to return new hypothesis which start constraints
+        that are not yet covered by this hypothesis.
+
+        """
+        assert hyp.unfinished_constraint is not True, 'hyp must not be part of an unfinished constraint'
+
+        new_constraint_hyps = []
+        available_constraints = hyp.constraint_candidates()
+
         pass
 
     def continue_constrained(self, hyp):
         pass
+
+    def combine_model_scores(self, scores):
+        """Use the weights to combine the scores from each model"""
+
+        assert len(scores) == self.num_models, 'we need a vector of scores for each model in the ensemble'
+        scores = numpy.array(scores)
+
+        # Note the negative sign here, letting us treat the score as a cost to minimize
+        weighted_scores = sum(-numpy.log(scores * self.model_weights[:, numpy.newaxis]))
+
+        # We dont use the model weights with probs because we want them to sum to 1
+        probs = sum(scores) / float(self.num_models)
+        return weighted_scores, probs
 
 
 
