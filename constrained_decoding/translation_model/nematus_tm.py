@@ -57,21 +57,23 @@ class NematusTranslationModel(AbstractConstrainedTM):
             params = load_params(model, param_list)
             tparams = init_theano_params(params)
 
-            # working: load model-specific input and output vocabularies
-            # working: note that some models may have multiple input factors -- if so, we need to split that model's input into factors
-
+            # load model-specific input and output vocabularies
+            # Note: some models have multiple input factors -- if so, we need to split that model's input into factors
+            #   using the same logic that was used at training time
+            # Note: every model's output vocabulary must be exactly the same in order to do ensemble decoding
             self.word_dicts.append(self.load_dictionaries(config['dictionaries'],
                                                           n_words_src=config.get('n_words_src', None)))
+
+
 
             f_init, f_next = build_sampler(tparams, config, use_noise, trng,
                                            return_alignment=config['return_alignment'])
 
-
-
             self.fs_init.append(f_init)
             self.fs_next.append(f_next)
 
-
+        # Make sure all output dicts have the same number of items
+        assert len(set(len(d['output_dict'] for d in self.word_dicts))) == 1, 'Output vocabularies must be identical'
 
     @staticmethod
     def load_dictionaries(dictionary_files, n_words_src=None):

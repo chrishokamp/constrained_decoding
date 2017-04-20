@@ -19,6 +19,7 @@ class TestNematusTM(unittest.TestCase):
         model_file = os.path.join(model_dir, 'model.iter370000.npz')
         cls.model_file = model_file
 
+        # params which are inputs to `nematus/translate.py`, but aren't part of the persisted *.json config
         translate_config = {
             "return_alignment": False
         }
@@ -67,11 +68,20 @@ class TestNematusTM(unittest.TestCase):
         }
 
         cls.config = dict(translate_config, **config)
+        cls.test_tm = NematusTranslationModel([cls.model_file], [cls.config],
+                                              model_weights=None)
 
     def test_initialization(self):
-        test_tm = NematusTranslationModel([self.model_file], [self.config],
-                                          model_weights=None)
-        self.assertTrue(len(test_tm.fs_init) == len(test_tm.fs_next) == 1)
+        self.assertTrue(len(self.test_tm.fs_init) == len(self.test_tm.fs_next) == 1)
+
+    def test_load_dictionaries(self):
+        dict_keys = ['input_dicts', 'input_idicts', 'output_dict', 'output_idict']
+        for dict_map in self.test_tm.word_dicts:
+            self.assertTrue(all(k in dict_map.keys() for k in dict_keys))
+            self.assertTrue(type(dict_map['input_dicts'] is list))
+            self.assertTrue(type(dict_map['input_idicts'] is list))
+            self.assertTrue(type(dict_map['output_dict'] is dict))
+            self.assertTrue(type(dict_map['output_idict'] is dict))
 
     def test_mapping_inputs(self):
         """Test that each of test_tm's models knows how to map inputs into internal representations"""
