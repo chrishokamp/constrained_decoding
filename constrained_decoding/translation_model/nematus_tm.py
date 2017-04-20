@@ -280,7 +280,7 @@ class NematusTranslationModel(AbstractConstrainedTM):
             payload = {
                 'next_states': next_states,
                 'contexts': hyp.payload['contexts'],
-                'next_w': token_idx
+                'next_w': numpy.array([token_idx]).astype('int64')
             }
 
             new_hyp = ConstraintHypothesis(
@@ -305,7 +305,6 @@ class NematusTranslationModel(AbstractConstrainedTM):
 
         """
         assert hyp.unfinished_constraint is not True, 'hyp must not be part of an unfinished constraint'
-
 
         next_states = [None] * self.num_models
         next_p = [None] * self.num_models
@@ -348,10 +347,9 @@ class NematusTranslationModel(AbstractConstrainedTM):
             payload = {
                 'next_states': next_states,
                 'contexts': hyp.payload['contexts'],
-                'next_w': constraint_idx
+                'next_w': numpy.array([constraint_idx]).astype('int64')
             }
 
-            # TODO: if the model knows about constraints, getting the score from the model must be done differently
             new_hyp = ConstraintHypothesis(token=self.word_dicts[0]['output_idict'][constraint_idx],
                                            score=next_score,
                                            coverage=coverage,
@@ -360,12 +358,67 @@ class NematusTranslationModel(AbstractConstrainedTM):
                                            backpointer=hyp,
                                            constraint_index=(idx, 0),
                                            unfinished_constraint=unfinished_constraint)
+
             new_constraint_hyps.append(new_hyp)
 
         return new_constraint_hyps
 
     def continue_constrained(self, hyp):
-        pass
+        assert hyp.unfinished_constraint is True, 'hyp must be part of an unfinished constraint'
+
+        next_states = [None] * self.num_models
+        next_p = [None] * self.num_models
+
+        for i in xrange(self.num_models):
+            # Note: batch size is implicitly = 1
+            inps = [hyp.payload['next_w'], hyp.payload['contexts'][i], hyp.payload['next_states'][i]]
+            ret = self.fs_next[i](*inps)
+            next_p[i], next_w_tmp, next_states[i] = ret[0], ret[1], ret[2]
+
+            #if return_alignment:
+            #    dec_alphas[i] = ret[3]
+
+            #if suppress_unk:
+            #    next_p[i][:,1] = -numpy.inf
+
+        # now compute the combined scores
+        weighted_scores, probs = self.combine_model_scores(next_p)
+        flat_scores = weighted_scores.flatten()
+
+        constraint_row_index = hyp.constraint_index[0]
+        # the index of the next token in the constraint
+        constraint_tok_index = hyp.constraint_index[1] + 1
+        constraint_index = (constraint_row_index, constraint_tok_index)
+
+        continued_constraint_token = hyp.constraints[constraint_index[0]][constraint_index[1]]
+
+        # get the score for this token from the logprobs
+        next_score = hyp.score + flat_scores[continued_constraint_token]
+
+        coverage = copy.deepcopy(hyp.coverage)
+        coverage[constraint_row_index][constraint_tok_index] = 1
+
+        if len(hyp.constraints[constraint_row_index]) > constraint_tok_index + 1:
+            unfinished_constraint = True
+        else:
+            unfinished_constraint = False
+
+        payload = {
+            'next_states': next_states,
+            'contexts': hyp.payload['contexts'],
+            'next_w': numpy.array([continued_constraint_token]).astype('int64')
+        }
+
+        new_hyp = ConstraintHypothesis(token=self.word_dicts[0]['output_idict'][continued_constraint_token],
+                                       score=next_score,
+                                       coverage=coverage,
+                                       constraints=hyp.constraints,
+                                       payload=payload,
+                                       backpointer=hyp,
+                                       constraint_index=constraint_index,
+                                       unfinished_constraint=unfinished_constraint)
+
+        return new_hyp
 
     def combine_model_scores(self, scores):
         """Use the weights to combine the scores from each model"""

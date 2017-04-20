@@ -119,9 +119,17 @@ class TestNematusTM(unittest.TestCase):
         self.assertTrue(len(next_hyps) == 1)
         self.assertTrue(next_hyps[0].token == constraint_1[0])
 
-
     def test_continue_constrained(self):
-        pass
+        test_input = u'A sample English sentence'
+        mapped_input = self.test_tm.map_inputs([test_input])
+        constraint_1 = u'ein langer'.split()
+        test_constraints = self.test_tm.map_constraints([constraint_1])
+        start_hyp = self.test_tm.start_hypothesis(mapped_input, test_constraints)
+
+        next_hyps = self.test_tm.generate_constrained(start_hyp)
+        continued_hyp = self.test_tm.continue_constrained(next_hyps[0])
+        self.assertTrue(continued_hyp.token == constraint_1[1])
+        self.assertFalse(continued_hyp.unfinished_constraint)
 
 
 if __name__ == '__main__':
