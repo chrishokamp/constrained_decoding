@@ -43,23 +43,15 @@ class TestNematusTM(unittest.TestCase):
            "batch_size": 64,
            "encoder": "gru",
            "lrate": 0.0001,
-           "valid_datasets": [
-               "dev.bpe.en",
-               "dev.bpe.de"
-           ],
            "shuffle_each_epoch": True,
            "dim": 1024,
            "use_dropout": False,
-           "datasets": [
-               "corpus.bpe.en.shuf",
-               "corpus.bpe.de.shuf"
-           ],
            "dim_word": 500,
            "sampleFreq": 10000,
            "finetune": True,
            "dictionaries": [
-               "vocab.src.json",
-               "vocab.pe.json"
+               os.path.join(model_dir, "vocab.src.json"),
+               os.path.join(model_dir, "vocab.pe.json")
            ],
            "reload_": True,
            "maxlen": 50,
