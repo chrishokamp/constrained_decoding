@@ -47,10 +47,15 @@ class NeuralTranslationModel(AbstractConstrainedTM):
         return (source_seq, constraint_seqs)
 
     # TODO: remove target_prefix from args (see below)
+    # TODO: standardize this interface to only take (inputs, constraints)
+    # TODO: this will let us keep the GBS implementation as abstract as possible
+    # TODO: add `map_inputs` to `AbstractConstrainedTM` interface
+    # TODO: add `map_constraints` to `AbstractConstrainedTM` interface -- split out constraint
+    # TODO: mapping logic from `build_input_representations` above
     def start_hypothesis(self, source_seq, target_prefix, constraints, coverage=None):
         """
         Build the start hyp for a neural translation model.
-        Models may or may not use constraints. I.e. by modeling
+        Models may or may not take constraints as inputs. I.e. by modeling
         the probability of generating vs. copying from the constraints.
 
         """
@@ -93,7 +98,6 @@ class NeuralTranslationModel(AbstractConstrainedTM):
         """
         Note: the `n_best` parameter here is only used to limit the number of hypothesis objects that are generated
         from the input hyp, the beam implementation may specify a different `n_best`
-
 
         """
 

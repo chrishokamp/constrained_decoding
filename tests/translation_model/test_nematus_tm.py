@@ -76,9 +76,29 @@ class TestNematusTM(unittest.TestCase):
             self.assertTrue(type(dict_map['output_idict'] is dict))
 
     def test_mapping_inputs(self):
-        """Test that each of test_tm's models knows how to map inputs into internal representations"""
+        """Test that each of the tm's models knows how to map inputs into internal representations"""
 
+        test_input = u'A sample English sentence'
+        mapped_input = self.test_tm.map_inputs([test_input])
+
+        self.assertTrue(len(mapped_input) == 1)
+        self.assertTrue(mapped_input[0].shape == (1, 5, 1))
+
+    def test_start_hypothesis(self):
+        test_input = u'A sample English sentence'
+        mapped_input = self.test_tm.map_inputs([test_input])
+
+        constraint_1 = u'Ein langweiliger'.split()
+        test_constraints = [constraint_1]
+
+        start_hyp = self.test_tm.start_hypothesis(mapped_input, test_constraints)
+
+        self.assertTrue('next_states' in start_hyp.payload.keys())
+        self.assertTrue(len(start_hyp.payload['next_states']) == 1)
+
+    def test_generate(self):
         pass
+
 
 
 
