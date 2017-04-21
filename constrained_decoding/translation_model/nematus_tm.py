@@ -38,7 +38,7 @@ class NematusTranslationModel(AbstractConstrainedTM):
         # don't use noise
         use_noise = shared(numpy.float32(0.))
 
-        self.eos_token = u'eos'
+        self.eos_token = '<eos>'
 
         self.fs_init = []
         self.fs_next = []
@@ -60,9 +60,8 @@ class NematusTranslationModel(AbstractConstrainedTM):
             #   using the same logic that was used at training time
             # Note: every model's output vocabulary must be exactly the same in order to do ensemble decoding
             self.word_dicts.append(self.load_dictionaries(config['dictionaries'],
-                                                          n_words_src=config.get('n_words_src', None)))
-
-
+                                                          n_words_src=config.get('n_words_src', None),
+                                                          n_words_trg=config.get('n_words', None)))
 
             f_init, f_next = build_sampler(tparams, config, use_noise, trng,
                                            return_alignment=config['return_alignment'])
@@ -79,11 +78,11 @@ class NematusTranslationModel(AbstractConstrainedTM):
             self.model_weights = numpy.ones(len(model_files))
         else:
             assert len(model_weights) == len(model_files), 'if you specify weights, there must be one per model'
-            self.model_weights = model_weights
+            self.model_weights = numpy.array(model_weights)
 
 
     @staticmethod
-    def load_dictionaries(dictionary_files, n_words_src=None):
+    def load_dictionaries(dictionary_files, n_words_src=None, n_words_trg=None):
         """
         Load the input dictionaries and output dictionary for a model. Note the `n_words_src` kwarg is here to
         maintain compatability with the dictionary loading logic in Nematus.
@@ -117,6 +116,10 @@ class NematusTranslationModel(AbstractConstrainedTM):
 
         # load target dictionary and invert
         output_dict = load_dict(output_dict_file)
+        if n_words_trg is not None:
+            for key, idx in output_dict.items():
+                if idx >= n_words_trg:
+                    del output_dict[key]
         output_idict = dict()
         for kk, vv in output_dict.iteritems():
             output_idict[vv] = kk
@@ -181,6 +184,7 @@ class NematusTranslationModel(AbstractConstrainedTM):
         """
         constraint_seqs = []
         for token_seq in constraint_token_seqs:
+            assert type(token_seq) is list or type(token_seq) is tuple, 'Constraint token seqs must be lists or tuples'
             # Note: all models share the same output dictionary, so we just use the first one
             token_idxs = [self.word_dicts[0]['output_dict'].get(token, 1) for token in token_seq]
             constraint_seqs.append(token_idxs)
@@ -233,8 +237,9 @@ class NematusTranslationModel(AbstractConstrainedTM):
 
         """
 
-        # if we already generated EOS, there's only one option -- just continue it and copy the current cost
-        if hyp.token == self.eos_token:
+        # if we already generated EOS and there are no constraints (vanilla beam search),
+        #   there's only one option -- just continue it and copy the current cost
+        if hyp.token == self.eos_token and len(hyp.constraints) == 0:
             new_hyp = ConstraintHypothesis(
                 token=self.eos_token,
                 score=hyp.score,
@@ -246,6 +251,9 @@ class NematusTranslationModel(AbstractConstrainedTM):
                 unfinished_constraint=False
             )
             return [new_hyp]
+        # if there are constraints, and we generated eos, this hyp is dead
+        elif hyp.token == self.eos_token and len(hyp.constraints) > 0:
+            return []
 
         next_states = [None] * self.num_models
         next_p = [None] * self.num_models
@@ -264,9 +272,10 @@ class NematusTranslationModel(AbstractConstrainedTM):
 
         # now compute the combined scores
         weighted_scores, probs = self.combine_model_scores(next_p)
+        flat_scores = weighted_scores.flatten()
 
-        n_best_idxs = numpy.argsort(weighted_scores.flatten())[:n_best]
-        n_best_scores = weighted_scores.flatten()[n_best_idxs]
+        n_best_idxs = numpy.argsort(flat_scores)[:n_best]
+        n_best_scores = flat_scores[n_best_idxs]
 
         next_hyps = []
         # create a new hypothesis for each of the n-best
@@ -425,17 +434,14 @@ class NematusTranslationModel(AbstractConstrainedTM):
 
         assert len(scores) == self.num_models, 'we need a vector of scores for each model in the ensemble'
         scores = numpy.array(scores)
+        # Note: this is another implicit batch size = 1 assumption
+        scores = numpy.squeeze(scores, axis=1)
 
         # Note the negative sign here, letting us treat the score as a cost to minimize
-        weighted_scores = sum(-numpy.log(scores * self.model_weights[:, numpy.newaxis]))
+        weighted_scores = numpy.sum(-numpy.log(scores) * self.model_weights[:, numpy.newaxis], axis=0)
 
         # We dont use the model weights with probs because we want them to sum to 1
-        probs = sum(scores) / float(self.num_models)
+        probs = numpy.sum(scores, axis=0) / float(self.num_models)
         return weighted_scores, probs
-
-
-
-
-
 
 

@@ -82,7 +82,7 @@ class ConstraintHypothesis:
         return available_constraints
 
 
-# Beam Constraints: Functions which specify True/False checks that need to pass for a hyp to be added to the beam
+# Beam Constraints (aka "Filters"): Functions which specify True/False checks that need to pass for a hyp to be added to the beam
 # TODO: move this into the `filter` API
 def unfinished(hyp, eos=u'</S>'):
     if hyp.token == eos:
@@ -90,13 +90,13 @@ def unfinished(hyp, eos=u'</S>'):
     return True
 
 
-def eos_covers_constraints(hyp, eos=u'</S>'):
+def eos_covers_constraints(hyp, eos=set(['<eos>', u'</S>'])):
     constraints_remaining = True
     coverage = hyp.coverage
     if sum(covered for cons in coverage for covered in cons) == sum(len(c) for c in coverage):
         constraints_remaining = False
     is_eos = False
-    if hyp.token == eos:
+    if hyp.token in eos:
         is_eos = True
 
     if constraints_remaining and is_eos:
@@ -142,7 +142,9 @@ class ConstrainedDecoder(object):
         self.continue_constraint_func = continue_constraint_func
         self.beam_implementation = beam_implementation
 
-        # TODO: allow user-specified beam_constraints
+        # TODO: allow user-specified beam_constraints as filters
+        # TODO: allow additional args to filter functions
+        # TODO: general factory DSL for filter functions
         self.beam_constraints = [eos_covers_constraints]
 
     # IMPLEMENTATION QUESTION: are mid-constraint hyps allowed to fall off of the beam or not?
@@ -250,7 +252,7 @@ class ConstrainedDecoder(object):
                      for h in output_hyps]
         true_lens = [float(l) for l in true_lens]
 
-        # if at least one hyp ends with eos, drop all the ones that don't
+        # if at least one hyp ends with eos, drop all the ones that don't (note this makes some big assumptions)
         eos_hyps = [h for h in output_hyps if eos_token in h.sequence]
         if len(eos_hyps) > 0:
             output_hyps = eos_hyps

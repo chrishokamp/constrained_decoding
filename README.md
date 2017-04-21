@@ -8,15 +8,37 @@ and another for models trained with [Nematus](https://github.com/rsennrich/nemat
 
 Any Nematus model should work out of the box. 
 
+### Citing
+TODO(chris): citation/publications 
+
+
 ### Quick Start
 
 
 ### Project Structure
 
 
+#### Core Abstractions
+
+
+### Running Experiments
+
+#### Pick-Revise 
+
+
+### Features
+
+TODO: table
+Ensemble and weighted decoding for Nematus models
+
+Even models with different inputs can be used jointly.
+
+
+#### Domain-Adaptation 
+
+
 ### Running Tests
 
-### Citing
 
 If you use code or ideas from this project, please cite:
 
