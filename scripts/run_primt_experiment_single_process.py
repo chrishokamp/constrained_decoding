@@ -98,8 +98,10 @@ def get_max_ref_start_constraint(hyp, ref, max_constraint_cutoff=3, ref_vocab=No
         for constraint_i in ref_constraints:
             try:
                 assert all(w in ref_vocab for w in constraint_i)
-            except:
-                raise ValueError('if a constraint is not in the index, theres a problem')
+            except AssertionError:
+                # raise ValueError('if a constraint is not in the index, theres a problem')
+                logger.warn(u'CONSTRAINT WORD MISSING FROM VOCABULARY: {}'.format([(w, w in ref_vocab)
+                                                                                   for w in constraint_i]))
 
     return (ref_constraints, longest_constraint)
 
