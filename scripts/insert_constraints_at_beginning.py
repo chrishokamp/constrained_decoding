@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 # TODO: move this to arg
-BLEU_SCRIPT = '/home/chris/projects/neural_mt/test_data/sample_experiment/tiny_demo_dataset/multi-bleu.perl'
+BLEU_SCRIPT = '/home/chokamp/projects/neural_mt/test_data/sample_experiment/tiny_demo_dataset/multi-bleu.perl'
 
 def compute_bleu_score(hyp_file, ref_file):
     multibleu_cmd = ['perl', BLEU_SCRIPT, ref_file, '<']
@@ -186,7 +186,7 @@ if __name__ == "__main__":
     constraints = json.loads(codecs.open(args.constraints, encoding='utf8').read())
 
     logger.info('Translating {} using constraint file {}'.format(args.source, args.constraints))
-    output_file_name = randomly_place_constraints(args.source, args.target, args.config, args.outputdir, constraints)
+    output_file_name = insert_constraints(args.source, args.target, args.config, args.outputdir, constraints)
 
     output_bleu = compute_bleu_score(output_file_name, args.target)
     logger.info("BLEU: {}".format(output_bleu))
