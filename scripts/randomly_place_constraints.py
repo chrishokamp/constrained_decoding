@@ -140,8 +140,9 @@ def randomly_place_constraints(source_file, target_file, config_file, output_dir
 
         # randomly place each constraint within the translation
         for c_i in constraint:
-            random_idx = np.random.randint(len(trimmed_trans))
-            trimmed_trans = trimmed_trans[:random_idx] + c_i + trimmed_trans[random_idx:]
+            if len(trimmed_trans) > 0:
+                random_idx = np.random.randint(len(trimmed_trans))
+                trimmed_trans = trimmed_trans[:random_idx] + c_i + trimmed_trans[random_idx:]
 
         with codecs.open(output_file_name, 'a', encoding='utf8') as out:
             out.write(u' '.join(trimmed_trans) + u'\n')
