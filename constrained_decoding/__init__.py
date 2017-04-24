@@ -11,6 +11,23 @@ def init_coverage(constraints):
     return coverage
 
 
+def create_constrained_decoder(translation_model):
+    """
+    Create a constrained decoder from a translation model that implements `translation_model.AbstractConstrainedTM`
+
+    Args:
+        translation_model (AbstractConstrainedTM): the translation model
+
+    Returns:
+        a new ConstrainedDecoder instance
+    """
+    decoder = ConstrainedDecoder(hyp_generation_func=translation_model.generate,
+                                 constraint_generation_func=translation_model.generate_constrained,
+                                 continue_constraint_func=translation_model.continue_constrained,
+                                 beam_implementation=Beam)
+    return decoder
+
+
 class ConstraintHypothesis:
     """A (partial) hypothesis which maintains an additional constraint coverage object
 
@@ -91,6 +108,10 @@ def unfinished(hyp, eos=u'</S>'):
 
 
 def eos_covers_constraints(hyp, eos=set(['<eos>', u'</S>'])):
+    """
+    Return False if hyp.token is <eos>, and hyp does not cover all constraints, True otherwise
+
+    """
     constraints_remaining = True
     coverage = hyp.coverage
     if sum(covered for cons in coverage for covered in cons) == sum(len(c) for c in coverage):
@@ -130,7 +151,6 @@ class Beam(object):
             yield hyp
 
 
-# FUNCTIONS USED BY THE CONSTRAINED DECODER
 # Note: hyps on the top level may be finished (End with EOS), or may be continuing (haven't gotten an EOS yet)
 # Note: because of the way we create new Beams, we would need to wrap the Beam class to access the `lower_better` kwarg
 class ConstrainedDecoder(object):
@@ -261,7 +281,6 @@ class ConstrainedDecoder(object):
             output_seqs = [(h.sequence, h.score / true_len) for h, true_len in zip(output_hyps, true_lens)]
         except:
             # Note: this happens when there is actually no output, just a None
-            #import ipdb;ipdb.set_trace()
             output_seqs = [([eos_token], 0.0)]
 
         output_seqs = sorted(output_seqs, key=lambda x: x[1])

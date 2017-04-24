@@ -41,6 +41,7 @@ segment, there should be an empty list.
 
 #### Domain-Adaptation 
 
+
 ### Performance
 
 Right now, this implementation is pretty slow, and it gets slower the more constraints you add :disappointed:. 
@@ -54,6 +55,8 @@ TODO(chris): table
 Ensemble and weighted decoding for Nematus models
 
 Even models with different inputs can be used jointly.
+
+
 
 
 ### Running Tests
