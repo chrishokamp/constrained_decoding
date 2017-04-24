@@ -6,14 +6,20 @@ We provide two sample implementations of translation models -- one using our fra
 Neural Interactive Machine Translation, 
 and another for models trained with [Nematus](https://github.com/rsennrich/nematus).
 
-Any Nematus model should work out of the box. This project can also be used as a general-purpose 
+NMT models trained with Nematus model work out of the box. This project can also be used as a general-purpose 
 ensembled decoder for Nematus models with or without constraints. 
 
 ### Citing
-TODO(chris): citation/publications 
+TODO(chrishokamp): citation/publications 
 
 
 ### Quick Start
+
+```
+cd constrained_decoding
+pip install -e .
+```
+
 
 
 ### Project Structure
@@ -29,17 +35,16 @@ TODO(chris): citation/publications
 
 ### Performance
 
-Right now, this implementation is pretty slow, and it gets slower the more constraints you add :disappointed:. 
+The current implementation is pretty slow, and it gets slower the more constraints you add :disappointed:. 
 The GBS algorithm can be easily parallelized, because each cell in a column is independent of the others (see paper). 
 However, implementing this requires us to make some assumptions about the underlying model, and would thus
 limit the generality of the code base. If you have ideas about how to make things faster, please create an issue. 
 
 ### Features
 
-TODO: table
-Ensemble and weighted decoding for Nematus models
+TODO(chrishokamp): table
+Ensemble, multi-input and weighted decoding for Nematus models
 
-Even models with different inputs can be used jointly.
 
 
 #### Domain-Adaptation 
