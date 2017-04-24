@@ -9,12 +9,19 @@ and another for models trained with [Nematus](https://github.com/rsennrich/nemat
 Any Nematus model should work out of the box. This project can also be used as a general-purpose 
 ensembled decoder for Nematus models with or without constraints. 
 
-### Citing
-TODO(chris): citation/publications 
-
-
 ### Quick Start
 
+```
+git clone https://github.com/chrishokamp/constrained_decoding.git
+cd constrained_decoding
+pip install -e .
+```
+
+### Citing
+
+If you use code or ideas from this project, please cite:
+
+TODO(chris): citation/publications 
 
 ### Project Structure
 
@@ -26,6 +33,7 @@ TODO(chris): citation/publications
 
 #### Pick-Revise 
 
+#### Domain-Adaptation 
 
 ### Performance
 
@@ -36,18 +44,13 @@ limit the generality of the code base. If you have ideas about how to make thing
 
 ### Features
 
-TODO: table
+TODO(chris): table
 Ensemble and weighted decoding for Nematus models
 
 Even models with different inputs can be used jointly.
 
 
-#### Domain-Adaptation 
-
-
 ### Running Tests
 
 
-If you use code or ideas from this project, please cite:
 
-TODO(chrishokamp): add arxiv bibtex 
