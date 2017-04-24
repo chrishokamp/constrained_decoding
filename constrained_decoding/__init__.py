@@ -255,7 +255,7 @@ class ConstrainedDecoder(object):
         return continuations
 
     @staticmethod
-    def best_n(search_grid, eos_token, n_best=1):
+    def best_n(search_grid, eos_token, n_best=1, cut_off_eos=True):
         top_row = max(k[1] for k in search_grid.keys())
 
         if top_row > 1:
@@ -282,6 +282,9 @@ class ConstrainedDecoder(object):
         except:
             # Note: this happens when there is actually no output, just a None
             output_seqs = [([eos_token], 0.0)]
+
+        if cut_off_eos:
+            output_seqs = [(seq[:int(t_len)], score) for (seq, score), t_len in zip(output_seqs, true_lens)]
 
         output_seqs = sorted(output_seqs, key=lambda x: x[1])
 
