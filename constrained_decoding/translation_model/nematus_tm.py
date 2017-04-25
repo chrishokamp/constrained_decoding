@@ -85,7 +85,7 @@ class NematusTranslationModel(AbstractConstrainedTM):
     def load_dictionaries(dictionary_files, n_words_src=None, n_words_trg=None):
         """
         Load the input dictionaries and output dictionary for a model. Note the `n_words_src` kwarg is here to
-        maintain compatability with the dictionary loading logic in Nematus.
+        maintain compatibility with the dictionary loading logic in Nematus.
 
         Args:
           dictionary_files: list of strings which are paths to *.json Nematus dictionary files
@@ -130,10 +130,12 @@ class NematusTranslationModel(AbstractConstrainedTM):
             'input_dicts': input_dicts,
             'input_idicts': input_idicts,
             'output_dict': output_dict,
-            'output_idict': output_idict
+            'output_idict': output_idict,
+            'src_size': n_words_src,
+            'trg_size': n_words_trg
         }
 
-    def map_inputs(self, inputs, factor_separator=u'|'):
+    def map_inputs(self, inputs, factor_separator='|'):
         """
         Map inputs to sequences of ints, which are token indices for the embedding layer(s) of each model
 
@@ -162,9 +164,8 @@ class NematusTranslationModel(AbstractConstrainedTM):
                 if len(self.word_dicts[i]['input_dicts']) == 1:
                     token = [self.word_dicts[i]['input_dicts'][0].get(token, 1)]
                 else:
-                    token = [self.word_dicts[i]['input_dicts'][j][f]
-                             if f in self.word_dicts[i]['input_dicts'][j][f]
-                             else 1 for (j, f) in enumerate(token.split(factor_separator))]
+                    token = [self.word_dicts[i]['input_dicts'][j].get(f, 1)
+                             for j, f in enumerate(token.split(factor_separator))]
 
                 mapped_input.append(token)
 
@@ -442,7 +443,13 @@ class NematusTranslationModel(AbstractConstrainedTM):
         """Use the weights to combine the scores from each model"""
 
         assert len(scores) == self.num_models, 'we need a vector of scores for each model in the ensemble'
-        scores = numpy.array(scores)
+        # this hack lets us do ad-hoc truncation of the vocabulary if we need to
+        scores = [a[:, :self.word_dicts[i]['trg_size']-1] if self.word_dicts[i]['trg_size'] is not None else a
+                  for i, a in enumerate(scores)]
+        try:
+            scores = numpy.array(scores)
+        except:
+            import ipdb; ipdb.set_trace()
         # Note: this is another implicit batch size = 1 assumption
         scores = numpy.squeeze(scores, axis=1)
 

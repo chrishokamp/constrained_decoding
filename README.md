@@ -1,6 +1,6 @@
 ## Lexically Constrained Decoding with Grid Beam Search
 
-This project is a reference implementation of Grid Beam Search for Lexically Constrained Decoding.
+This project is a reference implementation of Grid Beam Search (GBS) as presented in [Lexically Constrained Decoding For Sequence Generation](https://arxiv.org/abs/1704.07138).
 
 We provide two sample implementations of translation models -- one using our framework for
 Neural Interactive Machine Translation, 
@@ -23,7 +23,14 @@ TODO(chris): small model for checking installations
 
 If you use code or ideas from this project, please cite:
 
-TODO(chris): citation/publications 
+```
+@misc{1704.07138,
+Author = {Chris Hokamp and Qun Liu},
+Title = {Lexically Constrained Decoding for Sequence Generation Using Grid Beam Search},
+Year = {2017},
+Eprint = {arXiv:1704.07138},
+}
+```
 
 ### Project Structure
 
