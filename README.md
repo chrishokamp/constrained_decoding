@@ -41,7 +41,7 @@ Eprint = {arXiv:1704.07138},
 ### Running Experiments
 
 For PRIMT and Domain Adaptation experiments, the lexical constraints are stored in `*.json` files. 
-The format is `[[[c1_t1, c1_t2], [c2_t1, c2_t2, c2_t3], ...], ...]`*[]: 
+The format is `[[[c1_t1, c1_t2], [c2_t1, c2_t2, c2_t3], ...], ...]`: 
 Each constraint is a list of tokens, and each segment has a list of constraints. The length of the 
 outer list in the `*.json` should be the same as number of segments in the source data. If there are no constraints for a
 segment, there should be an empty list. 
