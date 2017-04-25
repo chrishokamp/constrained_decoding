@@ -446,10 +446,8 @@ class NematusTranslationModel(AbstractConstrainedTM):
         # this hack lets us do ad-hoc truncation of the vocabulary if we need to
         scores = [a[:, :self.word_dicts[i]['trg_size']-1] if self.word_dicts[i]['trg_size'] is not None else a
                   for i, a in enumerate(scores)]
-        try:
-            scores = numpy.array(scores)
-        except:
-            import ipdb; ipdb.set_trace()
+        scores = numpy.array(scores)
+
         # Note: this is another implicit batch size = 1 assumption
         scores = numpy.squeeze(scores, axis=1)
 
