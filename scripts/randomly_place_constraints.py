@@ -35,8 +35,8 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-# TODO: move this to arg
-BLEU_SCRIPT = '/home/chris/projects/neural_mt/test_data/sample_experiment/tiny_demo_dataset/multi-bleu.perl'
+BLEU_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../lib/multi-bleu.perl')
+
 
 def compute_bleu_score(hyp_file, ref_file):
     multibleu_cmd = ['perl', BLEU_SCRIPT, ref_file, '<']
@@ -140,8 +140,9 @@ def randomly_place_constraints(source_file, target_file, config_file, output_dir
 
         # randomly place each constraint within the translation
         for c_i in constraint:
-            random_idx = np.random.randint(len(trimmed_trans))
-            trimmed_trans = trimmed_trans[:random_idx] + c_i + trimmed_trans[random_idx:]
+            if len(trimmed_trans) > 0:
+                random_idx = np.random.randint(len(trimmed_trans))
+                trimmed_trans = trimmed_trans[:random_idx] + c_i + trimmed_trans[random_idx:]
 
         with codecs.open(output_file_name, 'a', encoding='utf8') as out:
             out.write(u' '.join(trimmed_trans) + u'\n')

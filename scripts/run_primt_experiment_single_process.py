@@ -19,11 +19,8 @@ import itertools
 import errno
 import json
 import shutil
-import time
 import re
 import os
-from collections import Counter
-from multiprocessing import Process, Queue
 from subprocess import Popen, PIPE
 
 import numpy as np
@@ -35,8 +32,7 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-# TODO: move this to arg
-BLEU_SCRIPT = '/home/chokamp/projects/neural_mt/test_data/sample_experiment/tiny_demo_dataset/multi-bleu.perl'
+BLEU_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../lib/multi-bleu.perl')
 
 def compute_bleu_score(hyp_file, ref_file):
     multibleu_cmd = ['perl', BLEU_SCRIPT, ref_file, '<']
