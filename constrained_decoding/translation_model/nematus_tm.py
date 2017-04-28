@@ -225,7 +225,8 @@ class NematusTranslationModel(AbstractConstrainedTM):
         payload = {
             'next_states': next_states,
             'contexts': contexts,
-            'next_w': next_w
+            'next_w': next_w,
+            'model_scores': numpy.zeros(self.num_models)
         }
 
         start_hyp = ConstraintHypothesis(
@@ -241,6 +242,8 @@ class NematusTranslationModel(AbstractConstrainedTM):
 
         return start_hyp
 
+    # WORKING: add each model's contribution into every payload
+    # WORKING: we need this to do MERT optimization
     def generate(self, hyp, n_best):
         """
         Generate the `n_best` hypotheses starting with `hyp`
@@ -281,8 +284,10 @@ class NematusTranslationModel(AbstractConstrainedTM):
             #    next_p[i][:,1] = -numpy.inf
 
         # now compute the combined scores
-        weighted_scores, probs = self.combine_model_scores(next_p)
+        weighted_scores, all_weighted_scores, probs = self.combine_model_scores(next_p)
         flat_scores = weighted_scores.flatten()
+
+        # WORKING: get the score from each model for each of the n-best
 
         n_best_idxs = numpy.argsort(flat_scores)[:n_best]
         n_best_scores = flat_scores[n_best_idxs]
@@ -295,11 +300,13 @@ class NematusTranslationModel(AbstractConstrainedTM):
             else:
                 # hyp.score is None for the start hyp
                 next_score = score
+                model_scores = all_weighted_scores
 
             payload = {
                 'next_states': next_states,
                 'contexts': hyp.payload['contexts'],
-                'next_w': numpy.array([token_idx]).astype('int64')
+                'next_w': numpy.array([token_idx]).astype('int64'),
+                'model_scores': hyp.payload['model_scores'] + all_weighted_scores[:, token_idx]
             }
 
             new_hyp = ConstraintHypothesis(
@@ -341,7 +348,7 @@ class NematusTranslationModel(AbstractConstrainedTM):
             #    next_p[i][:,1] = -numpy.inf
 
         # now compute the combined scores
-        weighted_scores, probs = self.combine_model_scores(next_p)
+        weighted_scores, all_weighted_scores, probs = self.combine_model_scores(next_p)
         flat_scores = weighted_scores.flatten()
 
         new_constraint_hyps = []
@@ -366,7 +373,8 @@ class NematusTranslationModel(AbstractConstrainedTM):
             payload = {
                 'next_states': next_states,
                 'contexts': hyp.payload['contexts'],
-                'next_w': numpy.array([constraint_idx]).astype('int64')
+                'next_w': numpy.array([constraint_idx]).astype('int64'),
+                'model_scores': hyp.payload['model_scores'] + all_weighted_scores[:, constraint_idx]
             }
 
             new_hyp = ConstraintHypothesis(token=self.word_dicts[0]['output_idict'][constraint_idx],
@@ -401,7 +409,7 @@ class NematusTranslationModel(AbstractConstrainedTM):
             #    next_p[i][:,1] = -numpy.inf
 
         # now compute the combined scores
-        weighted_scores, probs = self.combine_model_scores(next_p)
+        weighted_scores, all_weighted_scores, probs = self.combine_model_scores(next_p)
         flat_scores = weighted_scores.flatten()
 
         constraint_row_index = hyp.constraint_index[0]
@@ -425,7 +433,8 @@ class NematusTranslationModel(AbstractConstrainedTM):
         payload = {
             'next_states': next_states,
             'contexts': hyp.payload['contexts'],
-            'next_w': numpy.array([continued_constraint_token]).astype('int64')
+            'next_w': numpy.array([continued_constraint_token]).astype('int64'),
+            'model_scores': hyp.payload['model_scores'] + all_weighted_scores[:, continued_constraint_token]
         }
 
         new_hyp = ConstraintHypothesis(token=self.word_dicts[0]['output_idict'][continued_constraint_token],
@@ -451,11 +460,14 @@ class NematusTranslationModel(AbstractConstrainedTM):
         # Note: this is another implicit batch size = 1 assumption
         scores = numpy.squeeze(scores, axis=1)
 
+        # multiply weights along each row (rows correspond to the softmax output for a particular model)
         # Note the negative sign here, letting us treat the score as a cost to minimize
-        weighted_scores = numpy.sum(-numpy.log(scores) * self.model_weights[:, numpy.newaxis], axis=0)
+        all_weighted_scores = -numpy.log(scores) * self.model_weights[:, numpy.newaxis]
 
-        # We dont use the model weights with probs because we want them to sum to 1
+        combined_weighted_scores = numpy.sum(all_weighted_scores, axis=0)
+
+        # We don't use the model weights with probs because we want them to sum to 1
         probs = numpy.sum(scores, axis=0) / float(self.num_models)
-        return weighted_scores, probs
+        return combined_weighted_scores, all_weighted_scores, probs
 
 
