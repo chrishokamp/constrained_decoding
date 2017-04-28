@@ -27,11 +27,6 @@ class NematusTranslationModel(AbstractConstrainedTM):
           config: a dict containing key-->value for each argument supported by `nematus/translate.py`
 
         """
-
-        # WORKING: really we just care that models have the same _output_ vocabulary
-        # WORKING: if user specifies a different input per-model in an ensemble, we shouldn't care
-        # TODO: it's important that we transparently support weighted ensemble decoding
-
         assert len(model_files) == len(configs), 'We need config options for each model'
 
         trng = RandomStreams(1234)
@@ -145,9 +140,7 @@ class NematusTranslationModel(AbstractConstrainedTM):
           factor_separator: a string used to separate a model's input factors
 
         Returns:
-          TODO: confirm correct dimensionality
           mapped_inputs: list of np.arrays, each with dimensionality (factors, time, 1)
-
 
         """
         assert len(inputs) == len(self.fs_init), 'We need an input for each model'
@@ -242,8 +235,6 @@ class NematusTranslationModel(AbstractConstrainedTM):
 
         return start_hyp
 
-    # WORKING: add each model's contribution into every payload
-    # WORKING: we need this to do MERT optimization
     def generate(self, hyp, n_best):
         """
         Generate the `n_best` hypotheses starting with `hyp`
@@ -286,8 +277,6 @@ class NematusTranslationModel(AbstractConstrainedTM):
         # now compute the combined scores
         weighted_scores, all_weighted_scores, probs = self.combine_model_scores(next_p)
         flat_scores = weighted_scores.flatten()
-
-        # WORKING: get the score from each model for each of the n-best
 
         n_best_idxs = numpy.argsort(flat_scores)[:n_best]
         n_best_scores = flat_scores[n_best_idxs]
