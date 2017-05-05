@@ -104,7 +104,7 @@ def run(input_files, constraints_file, output, models, configs, weights,
             else:
                 output.write(decoder_output + u'\n')
 
-        if idx+1 % 10 == 0:
+        if (idx+1) % 10 == 0:
             logger.info('Wrote {} translations to {}'.format(idx+1, output.name))
 
 if __name__ == '__main__':
