@@ -77,5 +77,8 @@ if __name__ == '__main__':
 
     models, scores = zip(*best_n_models(args.model_dir, args.k_best))
 
+    print('BEST MODELS\n')
+    print('\n'.join(models))
+    print('BEST SCORES\n')
     print('\n'.join(models))
 
