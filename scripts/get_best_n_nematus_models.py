@@ -41,7 +41,7 @@ def get_all_saved_models(model_dir):
     '''
 
     saved_models = [os.path.join(model_dir, f) for f in os.listdir(model_dir)
-                    if os.path.isfile(os.path.join(model_dir, f)) and re.match('.*iter.*npz', f)]
+                    if os.path.isfile(os.path.join(model_dir, f)) and re.match('^.*iter.*npz$', f)]
 
     return saved_models
 
