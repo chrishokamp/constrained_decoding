@@ -80,5 +80,5 @@ if __name__ == '__main__':
     print('BEST MODELS\n')
     print('\n'.join(models))
     print('BEST SCORES\n')
-    print('\n'.join(models))
+    print('\n'.join([str(s) for s in scores]))
 
