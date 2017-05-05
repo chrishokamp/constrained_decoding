@@ -29,16 +29,12 @@ def load_config(filename):
     return dict(translate_config, **config)
 
 
-def run(input_files, constraints_file, output, models, configs, weights, n_best=1, length_factor=1.3, beam_size=5):
+def run(input_files, constraints_file, output, models, configs, weights,
+        n_best=1, length_factor=1.3, beam_size=5, mert_nbest=False):
 
     assert len(models) == len(configs), 'We need one config file for every model'
     if weights is not None:
         assert len(models) == len(weights), 'If you specify weights, there must be one for each model'
-
-
-    # TODO: remember Nematus needs _encoded_ utf8
-    # TODO: remember paths to vocab dictionaries may not be fully specified
-    # TODO: remember multiple input files
 
     configs = [load_config(f) for f in configs]
 
@@ -53,7 +49,7 @@ def run(input_files, constraints_file, output, models, configs, weights, n_best=
         constraints = json.loads(codecs.open(constraints_file, encoding='utf8').read())
 
     if output.name != '<stdout>':
-        output = codecs.open(output.name, 'w', encoding='utf-8')
+        output = codecs.open(output.name, 'w', encoding='utf8')
 
     input_iters = []
     for input_file in input_files:
@@ -71,16 +67,42 @@ def run(input_files, constraints_file, output, models, configs, weights, n_best=
         search_grid = decoder.search(start_hyp=start_hyp, constraints=input_constraints,
                                      max_hyp_len=int(round(len(mapped_inputs[0][0]) * length_factor)),
                                      beam_size=beam_size)
-        best_output = decoder.best_n(search_grid, nematus_tm.eos_token, n_best=n_best)
+
+        best_output = decoder.best_n(search_grid, nematus_tm.eos_token, n_best=n_best, return_model_scores=mert_nbest)
 
         if n_best > 1:
-            # start from idx 1 to cut off `None` at the beginning of the sequence
-            decoder_outputs = [u' '.join(s[0][1:]) for s in best_output]
-            # separate each n-best list with newline
-            output.write(u'\n'.join(decoder_outputs) + u'\n\n')
+
+            #WORKING: try making model scores and logprob negative for MERT
+            if mert_nbest:
+                # format each n-best entry in the mert format
+                translations, scores, model_scores = zip(*best_output)
+                # start from idx 1 to cut off `None` at the beginning of the sequence
+                translations = [u' '.join(s[1:]) for s in translations]
+                # create dummy feature names
+                model_names = [u'M{}'.format(m_i) for m_i in range(len(model_scores[0]))]
+                model_score_strings = [u' '.join([u'{}= {}'.format(model_name, -s_i)
+                                                  for model_name, s_i in zip(model_names, m_scores)])
+                                       for m_scores in model_scores]
+                nbest_output_strings = [u'{} ||| {} ||| {} ||| {}'.format(idx, translation, feature_scores, -logprob)
+                                        for translation, feature_scores, logprob
+                                        in zip(translations, model_score_strings, scores)]
+                decoder_output = u'\n'.join(nbest_output_strings) + u'\n'
+            else:
+                # start from idx 1 to cut off `None` at the beginning of the sequence
+                # separate each n-best list with newline
+                decoder_output = u'\n'.join([u' '.join(s[0][1:]) for s in best_output]) + u'\n\n'
+
+            if output.name == '<stdout>':
+                output.write(decoder_output.encode('utf8'))
+            else:
+                output.write(decoder_output)
         else:
+            # start from idx 1 to cut off `None` at the beginning of the sequence
             decoder_output = u' '.join(best_output[0][1:])
-            output.write(decoder_output + u'\n')
+            if output.name == '<stdout>':
+                output.write((decoder_output + u'\n').encode('utf8'))
+            else:
+                output.write(decoder_output + u'\n')
 
         if idx+1 % 10 == 0:
             logger.info('Wrote {} translations to {}'.format(idx+1, output.name))
@@ -96,16 +118,30 @@ if __name__ == '__main__':
                         help='(Optional) one weight per model, will be applied to `log(p_model)` at each timestep')
     parser.add_argument('--constraints', type=str, default=None, required=False,
                         help='(Optional) json file containing one (possibly empty) list of constraints per input line')
+    parser.add_argument('--beam_size', type=int, default=5, required=False,
+                        help='Decoder beam size (default=5)')
+    parser.add_argument('--nbest', type=int, default=1, required=False,
+                        help='N-best list size, must be 1 <= nbest <= beam_size')
+    parser.add_argument('--mert_nbest', dest='mert_nbest', action='store_true',
+                        help='If you use this argument, n-best list will be printed in format used for Moses MERT')
+    parser.add_argument('--load_weights', type=str, default=None,
+                        help='(Optional) a file name in MERT *.dense format which specifies the weights for each model')
+    parser.set_defaults(mert_nbest=False)
     parser.add_argument('-i', '--inputs', nargs='+', help="one or more input text files, corresponding to each model")
     parser.add_argument("-o", "--output", type=argparse.FileType('w'), default=sys.stdout,
                         help="Where to write the translated output")
     args = parser.parse_args()
 
-    run(args.inputs, args.constraints, args.output, args.models, args.configs, args.weights)
+    assert 1 <= args.nbest <= args.beam_size, 'N-best size must be 1 <= nbest <= args.beam_size'
 
+    # if user specified a weights file, assert that they didn't also specify weights on the command line
+    if args.weights is not None and args.load_weights is not None:
+        raise AssertionError('only one of {weights, load_weights} should be specified')
 
+    if args.load_weights is not None:
+        with codecs.open(args.load_weights, encoding='utf8') as weights_file:
+            args.weights = [float(l.strip().split()[-1]) for l in weights_file]
 
-
-# TODO: average model scores, or weighted sum
-# TODO: assert that dictionaries were found -- i.e. full paths to dictionaries are correct
+    run(args.inputs, args.constraints, args.output, args.models, args.configs, args.weights,
+        n_best=args.nbest, beam_size=args.beam_size, mert_nbest=args.mert_nbest)
 

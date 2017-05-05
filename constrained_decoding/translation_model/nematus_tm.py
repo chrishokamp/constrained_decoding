@@ -3,6 +3,7 @@ Implements AbstractConstrainedTM for Nematus NMT models
 """
 
 import copy
+import logging
 
 import numpy
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
@@ -16,6 +17,9 @@ from nematus.util import load_dict
 from . import AbstractConstrainedTM
 from .. import ConstraintHypothesis
 
+logging.basicConfig()
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 class NematusTranslationModel(AbstractConstrainedTM):
 
@@ -453,10 +457,14 @@ class NematusTranslationModel(AbstractConstrainedTM):
         # Note the negative sign here, letting us treat the score as a cost to minimize
         all_weighted_scores = -numpy.log(scores) * self.model_weights[:, numpy.newaxis]
 
+        # we pass these through so they can be used for optimization
+        unweighted_scores = -(numpy.log(scores))
+
         combined_weighted_scores = numpy.sum(all_weighted_scores, axis=0)
 
         # We don't use the model weights with probs because we want them to sum to 1
         probs = numpy.sum(scores, axis=0) / float(self.num_models)
-        return combined_weighted_scores, all_weighted_scores, probs
+
+        return combined_weighted_scores, unweighted_scores, probs
 
 
