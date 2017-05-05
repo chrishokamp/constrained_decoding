@@ -56,6 +56,7 @@ def best_n_models(model_dir, k_best):
 
     bleu_score_reports = codecs.open(os.path.join(model_dir,
                                                   'model.npz_bleu_scores'), encoding='utf8').read().strip().split('\n')
+    bleu_score_reports = [parse_bleu_output(l) for l in bleu_score_reports]
     saved_models = get_all_saved_models(model_dir)
 
     assert len(bleu_score_reports) == len(saved_models), 'There must be 1-to-1 correspondence' + \
