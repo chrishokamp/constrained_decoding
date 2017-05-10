@@ -279,6 +279,7 @@ class ConstrainedDecoder(object):
         #if len(eos_hyps) > 0:
         #    output_hyps = eos_hyps
 
+        # TODO: normalizing scores by true_len should be optional -- length norm param can also be weighted as in GNMT paper
         try:
             output_seqs = [(h.sequence, h.score / true_len, h) for h, true_len in zip(output_hyps, true_lens)]
         except:

@@ -41,7 +41,7 @@ def get_all_saved_models(model_dir):
     '''
 
     saved_models = [os.path.join(model_dir, f) for f in os.listdir(model_dir)
-                    if os.path.isfile(os.path.join(model_dir, f)) and re.match('^.*iter.*npz$', f)]
+                    if os.path.isfile(os.path.join(model_dir, f)) and re.match('^.*iter[0-9]+\.*npz$', f)]
 
     return saved_models
 
@@ -79,7 +79,7 @@ if __name__ == '__main__':
     models, scores = zip(*best_n_models(args.model_dir, args.k_best))
 
     print('BEST MODELS\n')
-    print('\n'.join(models))
+    print('\n'.join(models) + '\n')
     print('BEST SCORES\n')
-    print('\n'.join([str(s) for s in scores]))
+    print('\n'.join([str(s) for s in scores]) + '\n')
 

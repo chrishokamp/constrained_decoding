@@ -72,7 +72,6 @@ def run(input_files, constraints_file, output, models, configs, weights,
 
         if n_best > 1:
 
-            #WORKING: try making model scores and logprob negative for MERT
             if mert_nbest:
                 # format each n-best entry in the mert format
                 translations, scores, model_scores = zip(*best_output)
@@ -80,6 +79,7 @@ def run(input_files, constraints_file, output, models, configs, weights,
                 translations = [u' '.join(s[1:]) for s in translations]
                 # create dummy feature names
                 model_names = [u'M{}'.format(m_i) for m_i in range(len(model_scores[0]))]
+                #Note: we make model scores and logprob negative for MERT optimization to work
                 model_score_strings = [u' '.join([u'{}= {}'.format(model_name, -s_i)
                                                   for model_name, s_i in zip(model_names, m_scores)])
                                        for m_scores in model_scores]
@@ -126,6 +126,8 @@ if __name__ == '__main__':
                         help='If you use this argument, n-best list will be printed in format used for Moses MERT')
     parser.add_argument('--load_weights', type=str, default=None,
                         help='(Optional) a file name in MERT *.dense format which specifies the weights for each model')
+    parser.add_argument('--length_factor', type=float, default=1.3,
+                        help='(Optional) the factor to multiply the first input by to get the maximum output length for decoding')
     parser.set_defaults(mert_nbest=False)
     parser.add_argument('-i', '--inputs', nargs='+', help="one or more input text files, corresponding to each model")
     parser.add_argument("-o", "--output", type=argparse.FileType('w'), default=sys.stdout,
@@ -143,5 +145,5 @@ if __name__ == '__main__':
             args.weights = [float(l.strip().split()[-1]) for l in weights_file]
 
     run(args.inputs, args.constraints, args.output, args.models, args.configs, args.weights,
-        n_best=args.nbest, beam_size=args.beam_size, mert_nbest=args.mert_nbest)
+        n_best=args.nbest, beam_size=args.beam_size, mert_nbest=args.mert_nbest, length_factor=args.length_factor)
 
