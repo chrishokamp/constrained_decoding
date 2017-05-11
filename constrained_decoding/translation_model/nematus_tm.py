@@ -282,7 +282,9 @@ class NematusTranslationModel(AbstractConstrainedTM):
             #if suppress_unk:
             #    next_p[i][:,1] = -numpy.inf
 
-        mean_alignment = sum(alignments)/self.num_models
+        # Note we cannot naively take the mean because different models may have different inputs
+        #mean_alignment = sum(alignments)/self.num_models
+        mean_alignment = alignments[0]
 
         # now compute the combined scores
         weighted_scores, all_weighted_scores, probs = self.combine_model_scores(next_p)
@@ -347,7 +349,9 @@ class NematusTranslationModel(AbstractConstrainedTM):
             #if suppress_unk:
             #    next_p[i][:,1] = -numpy.inf
 
-        mean_alignment = sum(alignments)/self.num_models
+        # Note we cannot naively take the mean because different models may have different inputs
+        #mean_alignment = sum(alignments)/self.num_models
+        mean_alignment = alignments[0]
 
         # now compute the combined scores
         weighted_scores, all_weighted_scores, probs = self.combine_model_scores(next_p)
@@ -411,7 +415,9 @@ class NematusTranslationModel(AbstractConstrainedTM):
             #if suppress_unk:
             #    next_p[i][:,1] = -numpy.inf
 
-        mean_alignment = sum(alignments)/self.num_models
+        # Note we cannot naively take the mean because different models may have different inputs
+        #mean_alignment = sum(alignments)/self.num_models
+        mean_alignment = alignments[0]
 
         # now compute the combined scores
         weighted_scores, all_weighted_scores, probs = self.combine_model_scores(next_p)
