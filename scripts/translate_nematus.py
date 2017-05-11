@@ -36,6 +36,7 @@ def run(input_files, constraints_file, output, models, configs, weights,
     if weights is not None:
         assert len(models) == len(weights), 'If you specify weights, there must be one for each model'
 
+    # remember Nematus needs _encoded_ utf8
     configs = [load_config(f) for f in configs]
 
     # build ensembled TM
@@ -69,7 +70,8 @@ def run(input_files, constraints_file, output, models, configs, weights,
                                      max_hyp_len=int(round(len(mapped_inputs[0][0]) * length_factor)),
                                      beam_size=beam_size)
 
-        best_output = decoder.best_n(search_grid, nematus_tm.eos_token, n_best=n_best, return_model_scores=mert_nbest)
+        best_output = decoder.best_n(search_grid, nematus_tm.eos_token, n_best=n_best, return_model_scores=mert_nbest, return_alignments=True)
+        import ipdb;ipdb.set_trace()
 
         if n_best > 1:
 

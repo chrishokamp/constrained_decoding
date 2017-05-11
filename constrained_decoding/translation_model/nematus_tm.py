@@ -62,8 +62,11 @@ class NematusTranslationModel(AbstractConstrainedTM):
                                                           n_words_src=config.get('n_words_src', None),
                                                           n_words_trg=config.get('n_words', None)))
 
+            # WORKING: add passing attention model alignment through GBS
+            # f_init, f_next = build_sampler(tparams, config, use_noise, trng,
+            #                                return_alignment=config['return_alignment'])
             f_init, f_next = build_sampler(tparams, config, use_noise, trng,
-                                           return_alignment=config['return_alignment'])
+                                           return_alignment=True)
 
             self.fs_init.append(f_init)
             self.fs_next.append(f_next)
@@ -218,12 +221,14 @@ class NematusTranslationModel(AbstractConstrainedTM):
             next_states[i] = numpy.tile(ret[0], (1,1))
             contexts[i] = ret[1]
 
+
         # the payload contains everything that the next timestep will need to generate another output
         payload = {
             'next_states': next_states,
             'contexts': contexts,
             'next_w': next_w,
             'model_scores': numpy.zeros(self.num_models)
+            'alignments': None
         }
 
         start_hyp = ConstraintHypothesis(
@@ -266,17 +271,18 @@ class NematusTranslationModel(AbstractConstrainedTM):
         next_states = [None] * self.num_models
         next_p = [None] * self.num_models
 
+        alignments = []
         for i in xrange(self.num_models):
             # Note: batch size is implicitly = 1
             inps = [hyp.payload['next_w'], hyp.payload['contexts'][i], hyp.payload['next_states'][i]]
             ret = self.fs_next[i](*inps)
-            next_p[i], next_w_tmp, next_states[i] = ret[0], ret[1], ret[2]
+            next_p[i], next_w_tmp, next_states[i], alignment_weights = ret[0], ret[1], ret[2], ret[3]
 
-            #if return_alignment:
-            #    dec_alphas[i] = ret[3]
-
+            alignments.append(alignment_weights)
             #if suppress_unk:
             #    next_p[i][:,1] = -numpy.inf
+
+        mean_alignment = sum(alignments)/self.num_models
 
         # now compute the combined scores
         weighted_scores, all_weighted_scores, probs = self.combine_model_scores(next_p)
@@ -300,6 +306,7 @@ class NematusTranslationModel(AbstractConstrainedTM):
                 'contexts': hyp.payload['contexts'],
                 'next_w': numpy.array([token_idx]).astype('int64'),
                 'model_scores': hyp.payload['model_scores'] + all_weighted_scores[:, token_idx]
+                'alignments': mean_alignment
             }
 
             new_hyp = ConstraintHypothesis(
@@ -328,17 +335,19 @@ class NematusTranslationModel(AbstractConstrainedTM):
         next_states = [None] * self.num_models
         next_p = [None] * self.num_models
 
+        alignments = []
         for i in xrange(self.num_models):
             # Note: batch size is implicitly = 1
             inps = [hyp.payload['next_w'], hyp.payload['contexts'][i], hyp.payload['next_states'][i]]
             ret = self.fs_next[i](*inps)
-            next_p[i], next_w_tmp, next_states[i] = ret[0], ret[1], ret[2]
+            next_p[i], next_w_tmp, next_states[i], alignment_weights = ret[0], ret[1], ret[2], ret[3]
 
-            #if return_alignment:
-            #    dec_alphas[i] = ret[3]
+            alignments.append(alignment_weights)
 
             #if suppress_unk:
             #    next_p[i][:,1] = -numpy.inf
+
+        mean_alignment = sum(alignments)/self.num_models
 
         # now compute the combined scores
         weighted_scores, all_weighted_scores, probs = self.combine_model_scores(next_p)
@@ -368,6 +377,7 @@ class NematusTranslationModel(AbstractConstrainedTM):
                 'contexts': hyp.payload['contexts'],
                 'next_w': numpy.array([constraint_idx]).astype('int64'),
                 'model_scores': hyp.payload['model_scores'] + all_weighted_scores[:, constraint_idx]
+                'alignments': mean_alignment
             }
 
             new_hyp = ConstraintHypothesis(token=self.word_dicts[0]['output_idict'][constraint_idx],
@@ -389,17 +399,19 @@ class NematusTranslationModel(AbstractConstrainedTM):
         next_states = [None] * self.num_models
         next_p = [None] * self.num_models
 
+        alignments = []
         for i in xrange(self.num_models):
             # Note: batch size is implicitly = 1
             inps = [hyp.payload['next_w'], hyp.payload['contexts'][i], hyp.payload['next_states'][i]]
             ret = self.fs_next[i](*inps)
-            next_p[i], next_w_tmp, next_states[i] = ret[0], ret[1], ret[2]
+            next_p[i], next_w_tmp, next_states[i], alignment_weights = ret[0], ret[1], ret[2], ret[3]
 
-            #if return_alignment:
-            #    dec_alphas[i] = ret[3]
+            alignments.append(alignment_weights)
 
             #if suppress_unk:
             #    next_p[i][:,1] = -numpy.inf
+
+        mean_alignment = sum(alignments)/self.num_models
 
         # now compute the combined scores
         weighted_scores, all_weighted_scores, probs = self.combine_model_scores(next_p)
@@ -428,6 +440,7 @@ class NematusTranslationModel(AbstractConstrainedTM):
             'contexts': hyp.payload['contexts'],
             'next_w': numpy.array([continued_constraint_token]).astype('int64'),
             'model_scores': hyp.payload['model_scores'] + all_weighted_scores[:, continued_constraint_token]
+            'alignments': mean_alignment
         }
 
         new_hyp = ConstraintHypothesis(token=self.word_dicts[0]['output_idict'][continued_constraint_token],

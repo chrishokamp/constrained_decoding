@@ -81,6 +81,18 @@ class ConstraintHypothesis:
         return sequence[::-1]
 
     @property
+    def alignments(self):
+        alignment_weights = None
+        current_hyp = self
+        if current_hyp.payload.get('alignments', None) is not None:
+            while current_hyp.backpointer is not None:
+                alignment_weights.append(current_hyp.payload['alignments'])
+                current_hyp = current_hyp.backpointer
+            return alignment_weights[::-1]
+        else:
+            return None
+
+    @property
     def constraint_index_sequence(self):
         constraint_sequence = []
         current_hyp = self
@@ -257,7 +269,7 @@ class ConstrainedDecoder(object):
         return continuations
 
     @staticmethod
-    def best_n(search_grid, eos_token, n_best=1, cut_off_eos=True, return_model_scores=False):
+    def best_n(search_grid, eos_token, n_best=1, cut_off_eos=True, return_model_scores=False, return_alignments=False):
         top_row = max(k[1] for k in search_grid.keys())
 
         if top_row > 1:
@@ -296,9 +308,17 @@ class ConstrainedDecoder(object):
         else:
             output_seqs = [(seq, score) for seq, score, payload in output_seqs]
 
-        if n_best > 1:
-            return output_seqs[:n_best]
+        if return_alignments:
+            assert output_hyps[0].alignments is not None, 'Cannot return alignments if they are not part of hypothesis payloads'
+            alignments = [h.alignments for h in output_hyps]
+            if n_best > 1:
+                return output_seqs[:n_best], alignments[:n_best]
+            else:
+                return output_seqs[0], alignments[0]
         else:
-            return output_seqs[0]
+            if n_best > 1:
+                return output_seqs[:n_best]
+            else:
+                return output_seqs[0]
 
 
