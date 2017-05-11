@@ -64,6 +64,7 @@ def run(input_files, constraints_file, output, models, configs, weights,
 
         start_hyp = nematus_tm.start_hypothesis(mapped_inputs, input_constraints)
 
+        # Note: the length_factor is used with the length of the first model input of the ensemble
         search_grid = decoder.search(start_hyp=start_hyp, constraints=input_constraints,
                                      max_hyp_len=int(round(len(mapped_inputs[0][0]) * length_factor)),
                                      beam_size=beam_size)
