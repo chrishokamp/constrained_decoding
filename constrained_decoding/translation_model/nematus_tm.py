@@ -227,7 +227,7 @@ class NematusTranslationModel(AbstractConstrainedTM):
             'next_states': next_states,
             'contexts': contexts,
             'next_w': next_w,
-            'model_scores': numpy.zeros(self.num_models)
+            'model_scores': numpy.zeros(self.num_models),
             'alignments': None
         }
 
@@ -305,7 +305,7 @@ class NematusTranslationModel(AbstractConstrainedTM):
                 'next_states': next_states,
                 'contexts': hyp.payload['contexts'],
                 'next_w': numpy.array([token_idx]).astype('int64'),
-                'model_scores': hyp.payload['model_scores'] + all_weighted_scores[:, token_idx]
+                'model_scores': hyp.payload['model_scores'] + all_weighted_scores[:, token_idx],
                 'alignments': mean_alignment
             }
 
@@ -376,7 +376,7 @@ class NematusTranslationModel(AbstractConstrainedTM):
                 'next_states': next_states,
                 'contexts': hyp.payload['contexts'],
                 'next_w': numpy.array([constraint_idx]).astype('int64'),
-                'model_scores': hyp.payload['model_scores'] + all_weighted_scores[:, constraint_idx]
+                'model_scores': hyp.payload['model_scores'] + all_weighted_scores[:, constraint_idx],
                 'alignments': mean_alignment
             }
 
@@ -439,7 +439,7 @@ class NematusTranslationModel(AbstractConstrainedTM):
             'next_states': next_states,
             'contexts': hyp.payload['contexts'],
             'next_w': numpy.array([continued_constraint_token]).astype('int64'),
-            'model_scores': hyp.payload['model_scores'] + all_weighted_scores[:, continued_constraint_token]
+            'model_scores': hyp.payload['model_scores'] + all_weighted_scores[:, continued_constraint_token],
             'alignments': mean_alignment
         }
 

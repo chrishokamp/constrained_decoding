@@ -82,13 +82,13 @@ class ConstraintHypothesis:
 
     @property
     def alignments(self):
-        alignment_weights = None
         current_hyp = self
         if current_hyp.payload.get('alignments', None) is not None:
+            alignment_weights = []
             while current_hyp.backpointer is not None:
                 alignment_weights.append(current_hyp.payload['alignments'])
                 current_hyp = current_hyp.backpointer
-            return alignment_weights[::-1]
+            return np.squeeze(np.array(alignment_weights[::-1]), axis=1)
         else:
             return None
 
@@ -310,11 +310,12 @@ class ConstrainedDecoder(object):
 
         if return_alignments:
             assert output_hyps[0].alignments is not None, 'Cannot return alignments if they are not part of hypothesis payloads'
-            alignments = [h.alignments for h in output_hyps]
+            # we subtract 1 from true len index because the starting `None` token is not included in the `h.alignments`
+            alignments = [h.alignments[:int(t_len-1)] for h, t_len in zip(output_hyps, true_lens)]
             if n_best > 1:
                 return output_seqs[:n_best], alignments[:n_best]
             else:
-                return output_seqs[0], alignments[0]
+                return output_seqs[0], alignments[:1]
         else:
             if n_best > 1:
                 return output_seqs[:n_best]
