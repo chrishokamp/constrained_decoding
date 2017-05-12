@@ -269,7 +269,8 @@ class ConstrainedDecoder(object):
         return continuations
 
     @staticmethod
-    def best_n(search_grid, eos_token, n_best=1, cut_off_eos=True, return_model_scores=False, return_alignments=False):
+    def best_n(search_grid, eos_token, n_best=1, cut_off_eos=True, return_model_scores=False, return_alignments=False,
+               length_normalization=True):
         top_row = max(k[1] for k in search_grid.keys())
 
         if top_row > 1:
@@ -293,7 +294,10 @@ class ConstrainedDecoder(object):
 
         # TODO: normalizing scores by true_len should be optional -- length norm param can also be weighted as in GNMT paper
         try:
-            output_seqs = [(h.sequence, h.score / true_len, h) for h, true_len in zip(output_hyps, true_lens)]
+            if length_normalization:
+                output_seqs = [(h.sequence, h.score / true_len, h) for h, true_len in zip(output_hyps, true_lens)]
+            else:
+                output_seqs = [(h.sequence, h.score, h) for h in output_hyps]
         except:
             # Note: this happens when there is actually no output, just a None
             output_seqs = [([eos_token], float('inf'), None)]
@@ -301,7 +305,13 @@ class ConstrainedDecoder(object):
         if cut_off_eos:
             output_seqs = [(seq[:int(t_len)], score, h) for (seq, score, h), t_len in zip(output_seqs, true_lens)]
 
+        # sort by score, lower is better (i.e. cost semantics)
         output_seqs = sorted(output_seqs, key=lambda x: x[1])
+        if return_alignments:
+            assert output_hyps[0].alignments is not None, 'Cannot return alignments if they are not part of hypothesis payloads'
+            # we subtract 1 from true len index because the starting `None` token is not included in the `h.alignments`
+            alignments = [h.alignments[:int(t_len-1)] for (seq, score, h), t_len in zip(output_seqs, true_lens)]
+
         if return_model_scores:
             output_seqs = [(seq, score, h.payload['model_scores'] / true_len)
                            for (seq, score, h), true_len in zip(output_seqs, true_lens)]
@@ -309,9 +319,6 @@ class ConstrainedDecoder(object):
             output_seqs = [(seq, score) for seq, score, payload in output_seqs]
 
         if return_alignments:
-            assert output_hyps[0].alignments is not None, 'Cannot return alignments if they are not part of hypothesis payloads'
-            # we subtract 1 from true len index because the starting `None` token is not included in the `h.alignments`
-            alignments = [h.alignments[:int(t_len-1)] for h, t_len in zip(output_hyps, true_lens)]
             if n_best > 1:
                 return output_seqs[:n_best], alignments[:n_best]
             else:

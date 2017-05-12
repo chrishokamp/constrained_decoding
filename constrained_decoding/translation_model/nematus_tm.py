@@ -77,9 +77,9 @@ class NematusTranslationModel(AbstractConstrainedTM):
         self.num_models = len(self.fs_init)
 
         if model_weights is None:
-            self.model_weights = numpy.ones(len(model_files))
+            self.model_weights = numpy.ones(self.num_models) / float(self.num_models)
         else:
-            assert len(model_weights) == len(model_files), 'if you specify weights, there must be one per model'
+            assert len(model_weights) == self.num_models, 'if you specify weights, there must be one per model'
             self.model_weights = numpy.array(model_weights)
 
 

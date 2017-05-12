@@ -31,7 +31,7 @@ def load_config(filename):
 
 
 def run(input_files, constraints_file, output, models, configs, weights,
-        n_best=1, length_factor=1.3, beam_size=5, mert_nbest=False, write_alignments=None):
+        n_best=1, length_factor=1.3, beam_size=5, mert_nbest=False, write_alignments=None, length_norm=True):
 
     assert len(models) == len(configs), 'We need one config file for every model'
     if weights is not None:
@@ -77,7 +77,9 @@ def run(input_files, constraints_file, output, models, configs, weights,
                                      max_hyp_len=int(round(len(mapped_inputs[0][0]) * length_factor)),
                                      beam_size=beam_size)
 
-        best_output, best_alignments = decoder.best_n(search_grid, nematus_tm.eos_token, n_best=n_best, return_model_scores=mert_nbest, return_alignments=True)
+        best_output, best_alignments = decoder.best_n(search_grid, nematus_tm.eos_token, n_best=n_best,
+                                                      return_model_scores=mert_nbest,
+                                                      return_alignments=True, length_normalization=length_norm)
 
         if n_best > 1:
             if mert_nbest:
@@ -143,7 +145,10 @@ if __name__ == '__main__':
                         help='(Optional) the factor to multiply the first input by to get the maximum output length for decoding')
     parser.add_argument('--alignments_output', default=None,
                         help='(Optional) if a string is provided, alignment weights will be written to this file')
+    parser.add_argument('--no_length_norm', dest='length_norm', action='store_false',
+                        help='(Optional) if --no_length_norm is included, scores will not be normalized by hyp length')
     parser.set_defaults(mert_nbest=False)
+    parser.set_defaults(length_norm=True)
     parser.add_argument('-i', '--inputs', nargs='+', help="one or more input text files, corresponding to each model")
     parser.add_argument("-o", "--output", type=argparse.FileType('w'), default=sys.stdout,
                         help="Where to write the translated output")
@@ -160,5 +165,6 @@ if __name__ == '__main__':
             args.weights = [float(l.strip().split()[-1]) for l in weights_file]
 
     run(args.inputs, args.constraints, args.output, args.models, args.configs, args.weights,
-        n_best=args.nbest, beam_size=args.beam_size, mert_nbest=args.mert_nbest, length_factor=args.length_factor, write_alignments=args.alignments_output)
+        n_best=args.nbest, beam_size=args.beam_size, mert_nbest=args.mert_nbest, length_factor=args.length_factor,
+        write_alignments=args.alignments_output, length_norm=args.length_norm)
 
