@@ -286,6 +286,9 @@ class ConstrainedDecoder(object):
         true_lens = [h.sequence.index(eos_token) if eos_token in h.sequence else len(h.sequence)
                      for h in output_hyps]
         true_lens = [float(l) for l in true_lens]
+        # hack to let us keep true_len info after sorting
+        for h, true_len in zip(output_hyps, true_lens):
+            h.true_len = true_len
 
         # if at least one hyp ends with eos, drop all the ones that don't (note this makes some big assumptions)
         #eos_hyps = [h for h in output_hyps if eos_token in h.sequence]
@@ -310,7 +313,7 @@ class ConstrainedDecoder(object):
         if return_alignments:
             assert output_hyps[0].alignments is not None, 'Cannot return alignments if they are not part of hypothesis payloads'
             # we subtract 1 from true len index because the starting `None` token is not included in the `h.alignments`
-            alignments = [h.alignments[:int(t_len-1)] for (seq, score, h), t_len in zip(output_seqs, true_lens)]
+            alignments = [h.alignments[:int(h.true_len-1)] for seq, score, h in output_seqs]
 
         if return_model_scores:
             output_seqs = [(seq, score, h.payload['model_scores'] / true_len)
