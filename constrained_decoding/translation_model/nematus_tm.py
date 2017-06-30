@@ -12,7 +12,7 @@ from theano import shared
 from nematus.theano_util import (load_params, init_theano_params)
 from nematus.nmt import (build_sampler, gen_sample, init_params)
 from nematus.compat import fill_options
-from nematus.util import load_dict
+from nematus.util import load_dict, load_config
 
 from . import AbstractConstrainedTM
 from .. import ConstraintHypothesis
@@ -31,7 +31,8 @@ class NematusTranslationModel(AbstractConstrainedTM):
           config: a dict containing key-->value for each argument supported by `nematus/translate.py`
 
         """
-        assert len(model_files) == len(configs), 'We need config options for each model'
+        if configs is not None:
+            assert len(model_files) == len(configs), 'Number of models differs from numer of config files'
 
         trng = RandomStreams(1234)
         # don't use noise
@@ -45,6 +46,14 @@ class NematusTranslationModel(AbstractConstrainedTM):
         # each entry in self.word_dicts is:
         # `{'input_dicts': [...], 'input_idicts': [...], 'output_dict': <dict>, 'output_idict': <dict>}
         self.word_dicts = []
+
+        if configs is None:
+            # Nematus models with new format (no separate config)
+            configs = []
+            for model in model_files:
+                configs.append(load_config(model))
+                # backward compatibility
+                fill_options(configs[-1])
 
         for model, config in zip(model_files, configs):
             # fill in any unspecified options in-place
@@ -485,5 +494,3 @@ class NematusTranslationModel(AbstractConstrainedTM):
         probs = numpy.sum(scores, axis=0) / float(self.num_models)
 
         return combined_weighted_scores, unweighted_scores, probs
-
-
