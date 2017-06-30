@@ -3,6 +3,7 @@ Implements AbstractConstrainedTM for Nematus NMT models
 """
 
 import copy
+import json
 import logging
 
 import numpy
@@ -93,7 +94,18 @@ class NematusTranslationModel(AbstractConstrainedTM):
 
 
     @staticmethod
-    def load_dictionaries(dictionary_files, n_words_src=None, n_words_trg=None):
+    def is_utf8(filename):
+        """
+        Checks whether the encoding of `filename`'s content is utf-8.
+        """
+        with open(filename, 'rb') as f:
+            try:
+                f.read().decode('utf-8')
+                return True
+            except UnicodeDecodeError:
+                return False
+
+    def load_dictionaries(self, dictionary_files, n_words_src=None, n_words_trg=None):
         """
         Load the input dictionaries and output dictionary for a model. Note the `n_words_src` kwarg is here to
         maintain compatibility with the dictionary loading logic in Nematus.
@@ -104,6 +116,9 @@ class NematusTranslationModel(AbstractConstrainedTM):
         Returns:
           input_dicts, input_idicts, output_dict, output_idict
         """
+        def load_utf8_dict(filename):
+            with open(filename, 'rb') as f:
+                return json.load(f)
 
         input_dict_files = dictionary_files[:-1]
         output_dict_file = dictionary_files[-1]
@@ -112,7 +127,7 @@ class NematusTranslationModel(AbstractConstrainedTM):
         input_dicts = []
         input_idicts = []
         for dictionary in input_dict_files:
-            input_dict = load_dict(dictionary)
+            input_dict = load_utf8_dict(dictionary) if self.is_utf8(dictionary) else load_dict(dictionary)
             if n_words_src is not None:
                 for key, idx in input_dict.items():
                     if idx >= n_words_src:
@@ -126,7 +141,7 @@ class NematusTranslationModel(AbstractConstrainedTM):
             input_idicts.append(input_idict)
 
         # load target dictionary and invert
-        output_dict = load_dict(output_dict_file)
+        output_dict = load_utf8_dict(output_dict_file) if self.is_utf8(output_dict_file) else load_dict(output_dict_file)
         if n_words_trg is not None:
             for key, idx in output_dict.items():
                 if idx >= n_words_trg:
