@@ -30,6 +30,24 @@ def load_config(filename):
     return dict(translate_config, **config)
 
 
+def decode(decoder, translation_model, inputs, constraints=None):
+    mapped_inputs = translation_model.map_inputs(inputs)
+
+    input_constraints = []
+    if constraints is not None:
+        input_constraints = translation_model.map_constraints(constraints)
+
+    start_hyp = translation_model.start_hypothesis(mapped_inputs, input_constraints)
+
+    # Note: the length_factor is used with the length of the first model input of the ensemble
+    search_grid = decoder.search(start_hyp=start_hyp, constraints=input_constraints,
+                                 max_hyp_len=int(round(len(mapped_inputs[0][0]) * length_factor)),
+                                 beam_size=beam_size)
+
+    best_output, best_alignments = decoder.best_n(search_grid, nematus_tm.eos_token, n_best=n_best,
+                                                  return_model_scores=mert_nbest,
+                                                  return_alignments=True, length_normalization=length_norm)
+
 def run(input_files, constraints_file, output, models, configs, weights,
         n_best=1, length_factor=1.3, beam_size=5, mert_nbest=False, write_alignments=None, length_norm=True):
 
