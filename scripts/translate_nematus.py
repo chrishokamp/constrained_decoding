@@ -55,7 +55,9 @@ def run(input_files, constraints_file, output, models, configs, weights,
     if weights is not None:
         assert len(models) == len(weights), 'If you specify weights, there must be one for each model'
 
+    return_alignments = False
     if write_alignments is not None:
+        return_alignments = True
         try:
             os.remove(write_alignments)
         except OSError:
@@ -91,13 +93,29 @@ def run(input_files, constraints_file, output, models, configs, weights,
         start_hyp = nematus_tm.start_hypothesis(mapped_inputs, input_constraints)
 
         # Note: the length_factor is used with the length of the first model input of the ensemble
+        # in case the users constraints will go beyond the max length according to length_factor
+        max_hyp_len = int(round(len(mapped_inputs[0][0]) * length_factor))
+        if len(input_constraints) > 0:
+            num_constraint_tokens = sum(1 for c in input_constraints for _ in c)
+            if num_constraint_tokens >= max_hyp_len:
+                logger.warn('The number of tokens in the constraints are greater than max_len*length_factor, ' + \
+                            'autoscaling the maximum hypothesis length...')
+                max_hyp_len = num_constraint_tokens + int(round(len(mapped_inputs[0][0]) / 2))
+
         search_grid = decoder.search(start_hyp=start_hyp, constraints=input_constraints,
-                                     max_hyp_len=int(round(len(mapped_inputs[0][0]) * length_factor)),
+                                     max_hyp_len=max_hyp_len,
                                      beam_size=beam_size)
 
-        best_output, best_alignments = decoder.best_n(search_grid, nematus_tm.eos_token, n_best=n_best,
-                                                      return_model_scores=mert_nbest,
-                                                      return_alignments=True, length_normalization=length_norm)
+        if return_alignments:
+            best_output, best_alignments = decoder.best_n(search_grid, nematus_tm.eos_token, n_best=n_best,
+                                                          return_model_scores=mert_nbest,
+                                                          return_alignments=return_alignments,
+                                                          length_normalization=length_norm)
+        else:
+            best_output = decoder.best_n(search_grid, nematus_tm.eos_token, n_best=n_best,
+                                         return_model_scores=mert_nbest,
+                                         return_alignments=return_alignments,
+                                         length_normalization=length_norm)
 
         if n_best > 1:
             if mert_nbest:

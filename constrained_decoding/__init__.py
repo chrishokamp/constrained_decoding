@@ -139,9 +139,7 @@ def eos_covers_constraints(hyp, eos=set(['<eos>', u'</S>'])):
 
 class Beam(object):
 
-    # WORKING: testing optimization bugs
     def __init__(self, size, lower_better=True):
-    # def __init__(self, size, lower_better=False):
         # are bigger scores better or worse?
         if lower_better:
             self.hypotheses = SortedListWithKey(key=lambda x: x['score'])
