@@ -3,6 +3,7 @@ Implements AbstractConstrainedTM for Nematus NMT models
 """
 
 import copy
+import json
 import logging
 
 import numpy
@@ -12,7 +13,7 @@ from theano import shared
 from nematus.theano_util import (load_params, init_theano_params)
 from nematus.nmt import (build_sampler, gen_sample, init_params)
 from nematus.compat import fill_options
-from nematus.util import load_dict
+from nematus.util import load_dict, load_config
 
 from . import AbstractConstrainedTM
 from .. import ConstraintHypothesis
@@ -31,7 +32,8 @@ class NematusTranslationModel(AbstractConstrainedTM):
           config: a dict containing key-->value for each argument supported by `nematus/translate.py`
 
         """
-        assert len(model_files) == len(configs), 'We need config options for each model'
+        if configs is not None:
+            assert len(model_files) == len(configs), 'Number of models differs from numer of config files'
 
         trng = RandomStreams(1234)
         # don't use noise
@@ -45,6 +47,14 @@ class NematusTranslationModel(AbstractConstrainedTM):
         # each entry in self.word_dicts is:
         # `{'input_dicts': [...], 'input_idicts': [...], 'output_dict': <dict>, 'output_idict': <dict>}
         self.word_dicts = []
+
+        if configs is None:
+            # Nematus models with new format (no separate config)
+            configs = []
+            for model in model_files:
+                configs.append(load_config(model))
+                # backward compatibility
+                fill_options(configs[-1])
 
         for model, config in zip(model_files, configs):
             # fill in any unspecified options in-place
@@ -84,7 +94,18 @@ class NematusTranslationModel(AbstractConstrainedTM):
 
 
     @staticmethod
-    def load_dictionaries(dictionary_files, n_words_src=None, n_words_trg=None):
+    def is_utf8(filename):
+        """
+        Checks whether the encoding of `filename`'s content is utf-8.
+        """
+        with open(filename, 'rb') as f:
+            try:
+                f.read().decode('utf-8')
+                return True
+            except UnicodeDecodeError:
+                return False
+
+    def load_dictionaries(self, dictionary_files, n_words_src=None, n_words_trg=None):
         """
         Load the input dictionaries and output dictionary for a model. Note the `n_words_src` kwarg is here to
         maintain compatibility with the dictionary loading logic in Nematus.
@@ -95,6 +116,9 @@ class NematusTranslationModel(AbstractConstrainedTM):
         Returns:
           input_dicts, input_idicts, output_dict, output_idict
         """
+        def load_utf8_dict(filename):
+            with open(filename, 'rb') as f:
+                return json.load(f)
 
         input_dict_files = dictionary_files[:-1]
         output_dict_file = dictionary_files[-1]
@@ -103,7 +127,7 @@ class NematusTranslationModel(AbstractConstrainedTM):
         input_dicts = []
         input_idicts = []
         for dictionary in input_dict_files:
-            input_dict = load_dict(dictionary)
+            input_dict = load_utf8_dict(dictionary) if self.is_utf8(dictionary) else load_dict(dictionary)
             if n_words_src is not None:
                 for key, idx in input_dict.items():
                     if idx >= n_words_src:
@@ -117,7 +141,7 @@ class NematusTranslationModel(AbstractConstrainedTM):
             input_idicts.append(input_idict)
 
         # load target dictionary and invert
-        output_dict = load_dict(output_dict_file)
+        output_dict = load_utf8_dict(output_dict_file) if self.is_utf8(output_dict_file) else load_dict(output_dict_file)
         if n_words_trg is not None:
             for key, idx in output_dict.items():
                 if idx >= n_words_trg:
@@ -485,5 +509,3 @@ class NematusTranslationModel(AbstractConstrainedTM):
         probs = numpy.sum(scores, axis=0) / float(self.num_models)
 
         return combined_weighted_scores, unweighted_scores, probs
-
-

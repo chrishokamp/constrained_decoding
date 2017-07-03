@@ -64,7 +64,9 @@ def decode(decoder, translation_model, inputs, n_best, max_hyp_len, beam_size=5,
 def run(input_files, constraints_file, output, models, configs, weights,
         n_best=1, length_factor=1.3, beam_size=5, mert_nbest=False, write_alignments=None, length_norm=True):
 
-    assert len(models) == len(configs), 'We need one config file for every model'
+    if configs is not None:
+        assert len(models) == len(configs), 'Number of models differs from numer of config files'
+
     if weights is not None:
         assert len(models) == len(weights), 'If you specify weights, there must be one for each model'
 
@@ -77,7 +79,8 @@ def run(input_files, constraints_file, output, models, configs, weights,
             pass
 
     # remember Nematus needs _encoded_ utf8
-    configs = [load_config(f) for f in configs]
+    if configs is not None:
+        configs = [load_config(f) for f in configs]
 
     # build ensembled TM
     nematus_tm = NematusTranslationModel(models, configs, model_weights=weights)
@@ -169,7 +172,7 @@ if __name__ == '__main__':
     # TODO: support yaml configs
     parser.add_argument('-m', '--models', nargs='+', help='the paths to one or more Nematus models', required=True)
     parser.add_argument('-c', '--configs', nargs='+', help='paths to one or more config.json files for Nematus models',
-                        required=True)
+                        default=None, required=False)
     parser.add_argument('--weights', nargs='+', type=float, default=None, required=False,
                         help='(Optional) one weight per model, will be applied to `log(p_model)` at each timestep')
     parser.add_argument('--constraints', type=str, default=None, required=False,
@@ -208,4 +211,3 @@ if __name__ == '__main__':
     run(args.inputs, args.constraints, args.output, args.models, args.configs, args.weights,
         n_best=args.nbest, beam_size=args.beam_size, mert_nbest=args.mert_nbest, length_factor=args.length_factor,
         write_alignments=args.alignments_output, length_norm=args.length_norm)
-
