@@ -119,7 +119,7 @@ class NematusTranslationModel(AbstractConstrainedTM):
         """
         def load_utf8_dict(filename):
             with codecs.open(filename, 'rb', encoding='utf8') as f:
-                return json.load(f)
+                return {k.encode('utf8'): v for k,v in json.load(f).items()}
 
         input_dict_files = dictionary_files[:-1]
         output_dict_file = dictionary_files[-1]
