@@ -4,6 +4,7 @@ Implements AbstractConstrainedTM for Nematus NMT models
 
 import copy
 import json
+import codecs
 import logging
 
 import numpy
@@ -117,7 +118,7 @@ class NematusTranslationModel(AbstractConstrainedTM):
           input_dicts, input_idicts, output_dict, output_idict
         """
         def load_utf8_dict(filename):
-            with open(filename, 'rb') as f:
+            with codecs.open(filename, 'rb', encoding='utf8') as f:
                 return json.load(f)
 
         input_dict_files = dictionary_files[:-1]
