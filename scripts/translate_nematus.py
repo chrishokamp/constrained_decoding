@@ -1,7 +1,6 @@
 """
 Translate an input file (optionally with constraints), using one or more Nematus models,
 optionally specifying a weight for each model.
-
 """
 
 import argparse
@@ -30,7 +29,12 @@ def load_config(filename):
     return dict(translate_config, **config)
 
 
-def decode(decoder, translation_model, inputs, constraints=None):
+def decode(decoder, translation_model, inputs, n_best, max_hyp_len, beam_size=5,
+           constraints=None,
+           mert_nbest=False,
+           return_alignments=False,
+           length_norm=True):
+
     mapped_inputs = translation_model.map_inputs(inputs)
 
     input_constraints = []
@@ -40,13 +44,22 @@ def decode(decoder, translation_model, inputs, constraints=None):
     start_hyp = translation_model.start_hypothesis(mapped_inputs, input_constraints)
 
     # Note: the length_factor is used with the length of the first model input of the ensemble
-    search_grid = decoder.search(start_hyp=start_hyp, constraints=input_constraints,
-                                 max_hyp_len=int(round(len(mapped_inputs[0][0]) * length_factor)),
+    search_grid = decoder.search(start_hyp=start_hyp,
+                                 constraints=input_constraints,
+                                 max_hyp_len=max_hyp_len,
                                  beam_size=beam_size)
 
-    best_output, best_alignments = decoder.best_n(search_grid, nematus_tm.eos_token, n_best=n_best,
+    best_output, best_alignments = decoder.best_n(search_grid, translation_model.eos_token,
+                                                  n_best=n_best,
                                                   return_model_scores=mert_nbest,
-                                                  return_alignments=True, length_normalization=length_norm)
+                                                  return_alignments=return_alignments,
+                                                  length_normalization=length_norm)
+
+    if return_alignments:
+        return best_output, best_alignments
+    else:
+        return best_output
+
 
 def run(input_files, constraints_file, output, models, configs, weights,
         n_best=1, length_factor=1.3, beam_size=5, mert_nbest=False, write_alignments=None, length_norm=True):
@@ -84,38 +97,30 @@ def run(input_files, constraints_file, output, models, configs, weights,
         input_iters.append(codecs.open(input_file, encoding='utf8'))
 
     for idx, inputs in enumerate(itertools.izip(*input_iters)):
-        mapped_inputs = nematus_tm.map_inputs(inputs)
-
         input_constraints = []
         if constraints is not None:
-            input_constraints = nematus_tm.map_constraints(constraints[idx])
-
-        start_hyp = nematus_tm.start_hypothesis(mapped_inputs, input_constraints)
+            input_constraints = constraints
 
         # Note: the length_factor is used with the length of the first model input of the ensemble
         # in case the users constraints will go beyond the max length according to length_factor
-        max_hyp_len = int(round(len(mapped_inputs[0][0]) * length_factor))
+        max_hyp_len = int(round(len(inputs[0].split()) * length_factor))
         if len(input_constraints) > 0:
             num_constraint_tokens = sum(1 for c in input_constraints for _ in c)
             if num_constraint_tokens >= max_hyp_len:
                 logger.warn('The number of tokens in the constraints are greater than max_len*length_factor, ' + \
                             'autoscaling the maximum hypothesis length...')
-                max_hyp_len = num_constraint_tokens + int(round(len(mapped_inputs[0][0]) / 2))
+                max_hyp_len = num_constraint_tokens + int(round(len(max_hyp_len) / 2))
 
-        search_grid = decoder.search(start_hyp=start_hyp, constraints=input_constraints,
-                                     max_hyp_len=max_hyp_len,
-                                     beam_size=beam_size)
+        best_output = decode(decoder, nematus_tm, inputs, n_best,
+                             max_hyp_len=max_hyp_len,
+                             beam_size=beam_size,
+                             constraints=input_constraints,
+                             return_alignments=return_alignments,
+                             length_norm=length_norm)
 
         if return_alignments:
-            best_output, best_alignments = decoder.best_n(search_grid, nematus_tm.eos_token, n_best=n_best,
-                                                          return_model_scores=mert_nbest,
-                                                          return_alignments=return_alignments,
-                                                          length_normalization=length_norm)
-        else:
-            best_output = decoder.best_n(search_grid, nematus_tm.eos_token, n_best=n_best,
-                                         return_model_scores=mert_nbest,
-                                         return_alignments=return_alignments,
-                                         length_normalization=length_norm)
+            # decoding returned a tuple with 2 items
+            best_output, best_alignments = best_output
 
         if n_best > 1:
             if mert_nbest:
