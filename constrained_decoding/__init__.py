@@ -81,6 +81,17 @@ class ConstraintHypothesis:
         return sequence[::-1]
 
     @property
+    def constraint_indexes(self):
+        """Return the (start, end) indexes of the constraints covered by this hypothesis"""
+        sequence = []
+        current_hyp = self
+        while current_hyp.backpointer is not None:
+            sequence.append(current_hyp.token)
+            current_hyp = current_hyp.backpointer
+        sequence.append(current_hyp.token)
+        return sequence[::-1]
+
+    @property
     def alignments(self):
         current_hyp = self
         if current_hyp.payload.get('alignments', None) is not None:
@@ -186,7 +197,6 @@ class ConstrainedDecoder(object):
         """
 
         # the total number of constraint tokens determines the height of the grid
-        # TODO: the total grid height should be +1 because the first row has no constraints
         grid_height = sum(len(c) for c in constraints)
 
         search_grid = OrderedDict()
@@ -293,7 +303,7 @@ class ConstrainedDecoder(object):
         #if len(eos_hyps) > 0:
         #    output_hyps = eos_hyps
 
-        # TODO: normalizing scores by true_len should be optional -- length norm param can also be weighted as in GNMT paper
+        # normalizing scores by true_len is optional -- Note: length norm param could also be weighted as in GNMT paper
         try:
             if length_normalization:
                 output_seqs = [(h.sequence, h.score / true_len, h) for h, true_len in zip(output_hyps, true_lens)]
@@ -317,7 +327,7 @@ class ConstrainedDecoder(object):
             output_seqs = [(seq, score, h.payload['model_scores'] / true_len)
                            for (seq, score, h), true_len in zip(output_seqs, true_lens)]
         else:
-            output_seqs = [(seq, score) for seq, score, payload in output_seqs]
+            output_seqs = [(seq, score, h) for seq, score, h in output_seqs]
 
         if return_alignments:
             if n_best > 1:

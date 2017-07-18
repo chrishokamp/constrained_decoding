@@ -64,3 +64,15 @@ Ensembling and weighted decoding for Nematus models
 ### Running Tests
 
 
+### Using the Prototype server
+
+We provide a very simple server for convenience while prototyping. 
+
+To run the server, do:
+```
+THEANO_FLAGS=mode=FAST_RUN,floatX=float32,device=cpu
+
+```
+
+
+

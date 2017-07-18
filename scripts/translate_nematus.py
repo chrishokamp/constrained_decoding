@@ -124,7 +124,7 @@ def run(input_files, constraints_file, output, models, configs, weights,
         if return_alignments:
             # decoding returned a tuple with 2 items
             best_output, best_alignments = best_output
-
+        
         if n_best > 1:
             if mert_nbest:
                 # format each n-best entry in the mert format
