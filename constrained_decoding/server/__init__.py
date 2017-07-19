@@ -1,8 +1,5 @@
 import logging
 import os
-import re
-import json
-import os
 import codecs
 from subprocess import Popen, PIPE
 
@@ -120,17 +117,17 @@ class DataProcessor(object):
     
     """
 
-    def __init__(self, source_lang, use_subword=False, subword_codes=None):
+    def __init__(self, lang, use_subword=False, subword_codes=None):
         self.use_subword = use_subword
         if self.use_subword:
             subword_codes_iter = codecs.open(subword_codes, encoding='utf-8')
             self.bpe = BPE(subword_codes_iter)
 
-        self.source_lang = source_lang
+        self.lang = lang
 
         # Note hardcoding of script location within repo
         tokenize_script = os.path.join(os.path.dirname(__file__), 'resources/tokenizer/tokenizer.perl')
-        self.tokenizer_cmd = [tokenize_script, '-l', self.source_lang, '-no-escape', '1', '-q', '-', '-b']
+        self.tokenizer_cmd = [tokenize_script, '-l', self.lang, '-no-escape', '1', '-q', '-', '-b']
         self.tokenizer = Popen(self.tokenizer_cmd, stdin=PIPE, stdout=PIPE, bufsize=1)
 
     def tokenize(self, text):
@@ -253,7 +250,6 @@ def neural_mt_endpoint():
     # TODO: parse request object, remove form
     if request.method == 'POST':
         request_data = request.get_json()
-        print(request_data)
         source_lang = request_data['source_lang']
         target_lang = request_data['target_lang']
         n_best = request_data.get('n_best', 1)
@@ -264,7 +260,6 @@ def neural_mt_endpoint():
 
         source_sentence = request_data['source_sentence']
         target_constraints = request_data.get('target_constraints', None)
-
 
         #logger.info('Acquired lock')
         #lock.acquire()
@@ -283,15 +278,13 @@ def neural_mt_endpoint():
 # TODO: Map and unmap hooks
 # TODO: remember that placeholder term mapping needs to pass the restore map through to postprocessing
 # TODO: restoring @num@ placeholders with word alignments? -- leave this for last
-
-
 def decode(source_lang, target_lang, source_sentence, constraints=None, n_best=1, length_factor=1.5, beam_size=5):
     """
     Decode an input sentence
     
     Args:
-      source_lang: two char src lang abbreviation
-      target_lang: two char src lang abbreviation
+      source_lang: two-char src lang abbreviation
+      target_lang: two-char target lang abbreviation
       source_sentence: the source sentence to translate (we assume already preprocessed)
       n_best: the length of the n-best list to return (default=1)
       
@@ -304,9 +297,11 @@ def decode(source_lang, target_lang, source_sentence, constraints=None, n_best=1
     # Note: remember we support multiple inputs for each model (i.e. each model may be an ensemble where sub-models
     # Note: accept different inputs)
 
-    data_processor = app.processors.get((source_lang, target_lang), None)
-    if data_processor is not None:
-        source_sentence = u' '.join(data_processor.tokenize(source_sentence))
+    source_data_processor = app.processors.get(source_lang, None)
+    target_data_processor = app.processors.get(target_lang, None)
+
+    if source_data_processor is not None:
+        source_sentence = u' '.join(source_data_processor.tokenize(source_sentence))
 
     inputs = [source_sentence]
 
@@ -314,7 +309,9 @@ def decode(source_lang, target_lang, source_sentence, constraints=None, n_best=1
 
     input_constraints = []
     if constraints is not None:
-        input_constraints = [data_processor.tokenize(c) for c in constraints]
+        if target_data_processor is not None:
+            input_constraints = [target_data_processor.tokenize(c) for c in constraints]
+
         input_constraints = model.map_constraints(input_constraints)
 
     start_hyp = model.start_hypothesis(mapped_inputs, input_constraints)
@@ -329,8 +326,9 @@ def decode(source_lang, target_lang, source_sentence, constraints=None, n_best=1
                                                   length_normalization=True)
 
     # WORKING: get the constraint indices from the hypothesis and return these as well
-    # TODO: logic for k-best vs 1-best
+    # TODO: check logic for k-best vs 1-best (sequence vs single obj)
     best_hyp = best_output[-1]
+    # print(best_hyp.constraint_indices)
     # import ipdb; ipdb.set_trace()
 
     if n_best > 1:
@@ -345,12 +343,13 @@ def decode(source_lang, target_lang, source_sentence, constraints=None, n_best=1
     # if write_alignments is not None:
     #     with codecs.open(write_alignments, 'a+', encoding='utf8') as align_out:
     #         align_out.write(json.dumps([a.tolist() for a in best_alignments]) + u'\n')
+
     return decoder_output
 
     # best_n_hyps, best_n_costs, best_n_glimpses, best_n_word_level_costs, best_n_confidences, src_in = predictor.predict_segment(source_sentence, target_prefix=target_prefix,
     #                                                     tokenize=True, detokenize=True, n_best=n_best, max_length=predictor.max_length)
 
-    # TODO: we _must_ add subword configuration as well -- we need to apply subword, then re-concat afterwards
+    # TODO: re-concat subword in post-processing
     # remove EOS and normalize subword
     # def _postprocess(hyp):
     #     hyp = re.sub("</S>$", "", hyp)

@@ -81,15 +81,46 @@ class ConstraintHypothesis:
         return sequence[::-1]
 
     @property
-    def constraint_indexes(self):
+    def constraint_indices(self):
         """Return the (start, end) indexes of the constraints covered by this hypothesis"""
-        sequence = []
+
+        # we know a hyp covered a constraint token if a coverage index changed from 0-->1
+        # we also know which constraint and which token was covered by looking at the indices in the coverage
+        # constraint tracker sequence = [None, (constraint_index, constraint_token_index), ...]
+        # for each hyp:
+        #     compare current_hyp.coverage with current_hyp.backpointer.coverage:
+        #         if there is a difference:
+        #             add difference to constraint tracker sequence
+        #         else:
+        #             add None to constraint tracker sequence
+
+        def _compare_constraint_coverage(coverage_one, coverage_two):
+            for constraint_idx, (this_coverage_row,
+                                 prev_coverage_row) in enumerate(zip(coverage_one,
+                                                                     coverage_two)):
+
+                for token_idx, (this_coverage_bool,
+                                prev_coverage_bool) in enumerate(zip(this_coverage_row, prev_coverage_row)):
+                    if this_coverage_bool != prev_coverage_bool:
+                        return constraint_idx, token_idx
+
+            return None
+
+        constraint_tracker_sequence = []
         current_hyp = self
         while current_hyp.backpointer is not None:
-            sequence.append(current_hyp.token)
+            # compare current_hyp.coverage with previous hyp's coverage
+            constraint_tracker_sequence.append(_compare_constraint_coverage(current_hyp.coverage,
+                                                                            current_hyp.backpointer.coverage))
             current_hyp = current_hyp.backpointer
-        sequence.append(current_hyp.token)
-        return sequence[::-1]
+
+        # we need to check if the first hyp covered a constraint
+        start_coverage = init_coverage(current_hyp.constraints)
+        constraint_tracker_sequence.append(_compare_constraint_coverage(current_hyp.coverage,
+                                                                        start_coverage))
+
+        # finally reverse this sequence to put it in order
+        return constraint_tracker_sequence[::-1]
 
     @property
     def alignments(self):
@@ -102,16 +133,6 @@ class ConstraintHypothesis:
             return np.squeeze(np.array(alignment_weights[::-1]), axis=1)
         else:
             return None
-
-    @property
-    def constraint_index_sequence(self):
-        constraint_sequence = []
-        current_hyp = self
-        while current_hyp.backpointer is not None:
-            constraint_sequence.append(current_hyp.constraint_index)
-            current_hyp = current_hyp.backpointer
-        constraint_sequence.append(current_hyp.constraint_index)
-        return constraint_sequence[::-1]
 
     def constraint_candidates(self):
         available_constraints = []
