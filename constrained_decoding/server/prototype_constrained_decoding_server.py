@@ -1,6 +1,4 @@
-
 # coding: utf-8
-
 
 import json
 import codecs
@@ -21,22 +19,27 @@ def load_config(filename):
 # Working: test with hard-coded config and model paths
 # Working: take these as args when calling the start server script
 # Working: add pre- and postprocessing to server infrastructure
-# Working: steps:
-# Working: (1) call server with correct command line args, leave running
-# Working: (2) run java application which sends requests to the server
-# Working: (3) write Iconic guys to see what the next steps are
+MODEL_DIR = '/home/chris/Desktop/Dropbox/amunmt_pretrained/src-pe/'
+DATADIR = '/home/chris/Desktop/Dropbox/amunmt_pretrained/src-pe/data/'
+
 configs = [
-    '/media/1tb_drive/nematus_ape_experiments/amunmt_ape_pretrained/system/models/src-pe/model.npz.json'
+    # '/media/1tb_drive/nematus_ape_experiments/amunmt_ape_pretrained/system/models/src-pe/model.npz.json'
+    MODEL_DIR + 'model.npz.json'
 ]
 
 models = [
-    '/media/1tb_drive/nematus_ape_experiments/amunmt_ape_pretrained/system/models/src-pe/model.4-best.averaged.npz'
+    # '/media/1tb_drive/nematus_ape_experiments/amunmt_ape_pretrained/system/models/src-pe/model.4-best.averaged.npz'
+    MODEL_DIR + 'model.4-best.averaged.npz'
 ]
 
-subword_codes = '/media/1tb_drive/nematus_ape_experiments/amunmt_ape_pretrained/system/data/en.bpe'
+# subword_codes = '/media/1tb_drive/nematus_ape_experiments/amunmt_ape_pretrained/system/data/en.bpe'
+en_subword_codes = DATADIR + 'en.bpe'
+de_subword_codes = DATADIR + 'de.bpe'
 
 # Make a data processor for this model
-data_processor = DataProcessor(source_lang='en', use_subword=True, subword_codes=subword_codes)
+# Note: we need different processors for every possible source and target language
+en_data_processor = DataProcessor(lang='en', use_subword=True, subword_codes=en_subword_codes)
+de_data_processor = DataProcessor(lang='de', use_subword=True, subword_codes=de_subword_codes)
 
 configs = [load_config(f) for f in configs]
 
@@ -44,11 +47,12 @@ configs = [load_config(f) for f in configs]
 nematus_tm = NematusTranslationModel(models, configs, model_weights=None)
 
 model_dict = {('en', 'de'): nematus_tm}
-processor_dict = {('en', 'de'): data_processor}
+processor_dict = {
+                    'en': en_data_processor,
+                    'de': de_data_processor
+                 }
 
 run_imt_server(models=model_dict, processors=processor_dict)
-
-
 
 
 

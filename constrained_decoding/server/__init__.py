@@ -6,7 +6,6 @@ from subprocess import Popen, PIPE
 from flask import Flask, request, render_template, jsonify, abort
 
 from constrained_decoding import create_constrained_decoder
-# from wtforms import Form, TextAreaField, validators
 
 logger = logging.getLogger(__name__)
 
@@ -202,49 +201,10 @@ class DataProcessor(object):
         pass
 
 
-# class NeuralMTDemoForm(Form):
-#     sentence = TextAreaField('Write the sentence here:',
-#                              [validators.Length(min=1, max=100000)])
-#     prefix = TextAreaField('Write the target prefix here:',
-#                              [validators.Length(min=1, max=100)])
-#     target_text = ''
-
-
 # TODO: multiple instances of the same model, delegate via thread queue?
 # TODO: supplementary info via endpoint -- softmax confidence, cumulative confidence, etc...
 # TODO: online updating via cache
 # TODO: require source and target language specification
-# @app.route('/neural_MT_demo', methods=['GET', 'POST'])
-# def neural_mt_demo():
-#     form = NeuralMTDemoForm(request.form)
-#     if request.method == 'POST' and form.validate():
-#
-#         # TODO: delegate to prefix decoder function here
-#         source_text = form.sentence.data # Problems in Spanish with 'A~nos. E'
-#         target_text = form.prefix.data
-#         logger.info('Acquired lock')
-#         lock.acquire()
-#
-#         source_sentence = source_text.encode('utf-8')
-#         target_prefix = target_text.encode('utf-8')
-#
-#         # translations, costs = app.predictor.predict_segment(source_sentence, tokenize=True, detokenize=True)
-#         translations, costs = app.predictor.predict_segment(source_sentence, target_prefix=target_prefix,
-#                                                             tokenize=True, detokenize=True, n_best=10)
-#
-#         output_text = ''
-#         for hyp in translations:
-#             output_text += hyp + '\n'
-#
-#         form.target_text = output_text.decode('utf-8')
-#         logger.info('detokenized translations:\n {}'.format(output_text))
-#
-#         print "Lock release"
-#         lock.release()
-#
-#     return render_template('neural_MT_demo.html', form=form)
-
-
 @app.route('/translate', methods=['GET', 'POST'])
 def neural_mt_endpoint():
     # TODO: parse request object, remove form
