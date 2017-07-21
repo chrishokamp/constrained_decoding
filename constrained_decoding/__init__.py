@@ -359,6 +359,7 @@ class ConstrainedDecoder(object):
             if n_best > 1:
                 return output_seqs[:n_best]
             else:
+                # Note in this case we don't return a list
                 return output_seqs[0]
 
 

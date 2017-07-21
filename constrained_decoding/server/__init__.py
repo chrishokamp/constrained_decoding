@@ -17,6 +17,91 @@ path_to_this_dir = os.path.dirname(os.path.abspath(__file__))
 app.template_folder = os.path.join(path_to_this_dir, 'templates')
 
 
+def remap_constraint_indices(tokenized_sequence, detokenized_sequence, constraint_indices):
+    """
+    Map the constraint indices of a tokenized sequence to the indices of a detokenized sequence
+
+    Any time there was '@@ ' in the tokenized sequence, we removed it
+      - the detokenized sequence has fewer spaces than the tokenized sequence
+    """
+    constraint_idx_starts = {start: end for start, end in constraint_indices}
+    constraint_idx_ends = {end: start for start, end in constraint_indices}
+
+    remapped_indices = []
+    tokenized_idx = 0
+    current_offset = 0
+    true_start = None
+    for true_idx, output_char in enumerate(detokenized_sequence):
+        if tokenized_idx in constraint_idx_starts:
+            true_start = tokenized_idx - current_offset
+        elif tokenized_idx in constraint_idx_ends:
+            assert true_start is not None, 'if we found an end, we also need a start'
+            true_end = tokenized_idx - current_offset
+            remapped_indices.append([true_start, true_end])
+            true_start = None
+        # this logic assumes that post-processing did not _change_ any characters
+        # I.e. no characters were substituted for other characters
+        while output_char != tokenized_sequence[tokenized_idx]:
+            tokenized_idx += 1
+            current_offset += 1
+            if tokenized_idx > len(tokenized_sequence):
+                raise IndexError('We went beyond the end of the longer sequence: {}, when comparing with: {}'.format(
+                    tokenized_sequence,
+                    detokenized_sequence
+                ))
+
+            if tokenized_idx in constraint_idx_starts:
+                true_start = tokenized_idx - current_offset
+            elif tokenized_idx in constraint_idx_ends:
+                assert true_start is not None, 'if we found an end, we also need a start'
+                true_end = tokenized_idx - current_offset
+                remapped_indices.append([true_start, true_end])
+                true_start = None
+
+        tokenized_idx += 1
+
+    if true_start is not None:
+        true_end = tokenized_idx - current_offset
+        remapped_indices.append([true_start, true_end])
+
+    return remapped_indices
+
+
+def convert_token_annotations_to_spans(token_sequence, constraint_annotations):
+    assert len(token_sequence) == len(constraint_annotations), 'we need one annotation per token for this to make sense'
+    # here we are just annotating which spans are constraints, we discard the constraint alignment information
+
+    span_annotations = []
+    output_sequence = u''
+    constraint_id = None
+    constraint_start_idx = None
+    for token, annotation in zip(token_sequence, constraint_annotations):
+
+        if annotation is not None:
+            if annotation[0] != constraint_id:
+                # we're starting a new constraint
+                constraint_start_idx = len(output_sequence)
+                if len(output_sequence) > 0:
+                    # we'll add a whitespace before the constraint starts below
+                    constraint_start_idx += 1
+
+                constraint_id = annotation[0]
+        else:
+            # a constraint just finished
+            if constraint_id is not None:
+                span_annotations.append([constraint_start_idx, len(output_sequence)])
+                constraint_id = None
+                constraint_start_idx = None
+
+        if len(output_sequence) == 0:
+            output_sequence = token
+        else:
+            output_sequence = u'{} {}'.format(output_sequence, token)
+
+
+    return span_annotations, output_sequence
+
+
 def get_pairs(word):
     """ (Subword Encoding) Return set of symbol pairs in a word.
 
@@ -112,8 +197,8 @@ class BPE(object):
 
 class DataProcessor(object):
     """
-    This class encapusulates pre- and post-processing functionality for TermNMT workflows
-    
+    This class encapusulates pre- and post-processing functionality
+
     """
 
     def __init__(self, lang, use_subword=False, subword_codes=None):
@@ -157,33 +242,33 @@ class DataProcessor(object):
     def detokenize(self, text):
         """
         Detokenize a string using the moses detokenizer
-        
-        Args: 
-            
+
+        Args:
+
         Returns:
-          
+
         """
         pass
 
     def truecase(self, text):
         """
         Truecase a string with this DataProcessor's truecasing model
-        
+
         Args:
-        
+
         Returns:
-        
+
         """
         pass
 
     def detruecase(self, text):
         """
         Deruecase a string using moses detruecaser
-        
+
         Args:
-        
+
         Returns:
-        
+
         """
         pass
 
@@ -191,23 +276,21 @@ class DataProcessor(object):
     def map_terms(self, tokens):
         """
         Map tokenized string through terminology
-        
+
         Args:
-          tokens: 
-          
+          tokens:
+
         Returns:
-          
+
         """
         pass
 
 
-# TODO: multiple instances of the same model, delegate via thread queue?
-# TODO: supplementary info via endpoint -- softmax confidence, cumulative confidence, etc...
+# TODO: multiple instances of the same model, delegate via thread queue? -- with Flask this is way too buggy
 # TODO: online updating via cache
 # TODO: require source and target language specification
 @app.route('/translate', methods=['GET', 'POST'])
-def neural_mt_endpoint():
-    # TODO: parse request object, remove form
+def constrained_decoding_endpoint():
     if request.method == 'POST':
         request_data = request.get_json()
         source_lang = request_data['source_lang']
@@ -241,15 +324,15 @@ def neural_mt_endpoint():
 def decode(source_lang, target_lang, source_sentence, constraints=None, n_best=1, length_factor=1.5, beam_size=5):
     """
     Decode an input sentence
-    
+
     Args:
       source_lang: two-char src lang abbreviation
       target_lang: two-char target lang abbreviation
       source_sentence: the source sentence to translate (we assume already preprocessed)
       n_best: the length of the n-best list to return (default=1)
-      
+
     Returns:
-        
+
     """
 
     model = app.models[(source_lang, target_lang)]
@@ -288,8 +371,11 @@ def decode(source_lang, target_lang, source_sentence, constraints=None, n_best=1
     # WORKING: get the constraint indices from the hypothesis and return these as well
     # TODO: check logic for k-best vs 1-best (sequence vs single obj)
     best_hyp = best_output[-1]
-    # print(best_hyp.constraint_indices)
-    # import ipdb; ipdb.set_trace()
+
+    # start from 1 to cut of the start symbol (None)
+    span_annotations, output_hyp = convert_token_annotations_to_spans(best_output[0][1:],
+                                                                      best_hyp.constraint_indices[1:])
+    import ipdb; ipdb.set_trace()
 
     if n_best > 1:
         # start from idx 1 to cut off `None` at the beginning of the sequence
@@ -310,6 +396,7 @@ def decode(source_lang, target_lang, source_sentence, constraints=None, n_best=1
     #                                                     tokenize=True, detokenize=True, n_best=n_best, max_length=predictor.max_length)
 
     # TODO: re-concat subword in post-processing
+    # TODO: detokenize in post-processing
     # remove EOS and normalize subword
     # def _postprocess(hyp):
     #     hyp = re.sub("</S>$", "", hyp)
@@ -323,7 +410,7 @@ def decode(source_lang, target_lang, source_sentence, constraints=None, n_best=1
     # return postprocessed_hyps
 
 
-# Note: this function will break libgpuarray if theano is using the GPU 
+# Note: this function will break libgpuarray if theano is using the GPU
 def run_imt_server(models, processors=None, port=5007):
     # Note: servers use a special .yaml config format-- maps language pairs to NMT configuration files
     # the server instantiates a predictor for each config, and hashes them by language pair tuples -- i.e. (en,fr)
