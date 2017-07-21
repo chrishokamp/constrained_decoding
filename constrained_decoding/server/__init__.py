@@ -323,15 +323,20 @@ def constrained_decoding_endpoint():
         span_annotations, raw_hyp = convert_token_annotations_to_spans(seq[1:],
                                                                        hyp.constraint_indices[1:])
 
-        # WORKING: get the constraint indices from the hypothesis and return these as well
-        # WORKING: now do postprocessing on the sequence and annotations
-        # WORKING: see IMT server for postprocessing logic -- add to DataProcessor below
-        # WORKING: now map constraint indices to post-processed sequence indices
         detokenized_hyp = target_data_processor.detokenize(raw_hyp)
-        print(u"raw hyp: {}".format(raw_hyp))
-        print(u"detokenized hyp: {}".format(detokenized_hyp))
 
-        output_objects.append({'translation': detokenized_hyp})
+        # map tokenized constraint indices to post-processed sequence indices
+        detokenized_span_indices = remap_constraint_indices(tokenized_sequence=raw_hyp,
+                                                            detokenized_sequence=detokenized_hyp,
+                                                            constraint_indices=span_annotations)
+        # print(u"raw hyp: {}".format(raw_hyp))
+        # print(u"detokenized hyp: {}".format(detokenized_hyp))
+        # print(u"tokenized indices: {}".format(span_annotations))
+        # print(u"detokenized indices: {}".format(detokenized_span_indices))
+
+        output_objects.append({'translation': detokenized_hyp,
+                               'constraint_annotations': detokenized_span_indices,
+                               'score': score})
 
 
     return jsonify({'outputs': output_objects})
@@ -387,26 +392,7 @@ def decode(source_lang, target_lang, source_sentence, constraints=None, n_best=1
     if n_best == 1:
         best_output = [best_output]
 
-
     return best_output
-
-    # WORKING HERE: include postprocessing
-    # best_n_hyps, best_n_costs, best_n_glimpses, best_n_word_level_costs, best_n_confidences, src_in = predictor.predict_segment(source_sentence, target_prefix=target_prefix,
-    #                                                     tokenize=True, detokenize=True, n_best=n_best, max_length=predictor.max_length)
-
-    # TODO: re-concat subword in post-processing
-    # TODO: detokenize in post-processing
-    # remove EOS and normalize subword
-    # def _postprocess(hyp):
-    #     hyp = re.sub("</S>$", "", hyp)
-    #     # Note the order of the next two lines is important
-    #     hyp = re.sub("\@\@ ", "", hyp)
-    #     hyp = re.sub("\@\@", "", hyp)
-    #     return hyp
-    #
-    # postprocessed_hyps = [_postprocess(h) for h in best_n_hyps]
-
-    # return postprocessed_hyps
 
 
 # Note: this function will break libgpuarray if theano is using the GPU
