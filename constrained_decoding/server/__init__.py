@@ -1,6 +1,7 @@
 import logging
 import os
 import codecs
+import re
 from subprocess import Popen, PIPE
 
 from flask import Flask, request, render_template, jsonify, abort
@@ -214,6 +215,9 @@ class DataProcessor(object):
         self.tokenizer_cmd = [tokenize_script, '-l', self.lang, '-no-escape', '1', '-q', '-', '-b']
         self.tokenizer = Popen(self.tokenizer_cmd, stdin=PIPE, stdout=PIPE, bufsize=1)
 
+        detokenize_script = os.path.join(os.path.dirname(__file__), 'resources/tokenizer/detokenizer.perl')
+        self.detokenizer_cmd = [detokenize_script, '-l', self.lang, '-q', '-']
+
     def tokenize(self, text):
         if len(text.strip()) == 0:
             return []
@@ -248,7 +252,18 @@ class DataProcessor(object):
         Returns:
 
         """
-        pass
+        if self.use_subword:
+            text = re.sub("\@\@ ", "", text)
+            text = re.sub("\@\@", "", text)
+
+        if type(text) is unicode:
+            text = text.encode('utf8')
+
+        detokenizer = Popen(self.detokenizer_cmd, stdin=PIPE, stdout=PIPE)
+        text, _ = detokenizer.communicate(text)
+
+        utf_line = text.rstrip().decode('utf8')
+        return utf_line
 
     def truecase(self, text):
         """
@@ -273,54 +288,55 @@ class DataProcessor(object):
         pass
 
 
-    def map_terms(self, tokens):
-        """
-        Map tokenized string through terminology
-
-        Args:
-          tokens:
-
-        Returns:
-
-        """
-        pass
-
-
 # TODO: multiple instances of the same model, delegate via thread queue? -- with Flask this is way too buggy
 # TODO: online updating via cache
 # TODO: require source and target language specification
-@app.route('/translate', methods=['GET', 'POST'])
+@app.route('/translate', methods=['POST'])
 def constrained_decoding_endpoint():
-    if request.method == 'POST':
-        request_data = request.get_json()
-        source_lang = request_data['source_lang']
-        target_lang = request_data['target_lang']
-        n_best = request_data.get('n_best', 1)
+    request_data = request.get_json()
+    source_lang = request_data['source_lang']
+    target_lang = request_data['target_lang']
+    n_best = request_data.get('n_best', 1)
 
-        if (source_lang, target_lang) not in app.models:
-            logger.error('MT Server does not have a model for: {}'.format((source_lang, target_lang)))
-            abort(404)
+    if (source_lang, target_lang) not in app.models:
+        logger.error('MT Server does not have a model for: {}'.format((source_lang, target_lang)))
+        abort(404)
 
-        source_sentence = request_data['source_sentence']
-        target_constraints = request_data.get('target_constraints', None)
+    source_sentence = request_data['source_sentence']
+    target_constraints = request_data.get('target_constraints', None)
 
-        #logger.info('Acquired lock')
-        #lock.acquire()
+    #logger.info('Acquired lock')
+    #lock.acquire()
+    #print "Lock release"
+    #lock.release()
 
-        translations = decode(source_lang, target_lang, source_sentence,
-                              constraints=target_constraints, n_best=n_best)
+    # Note best_hyps is always a list
+    best_outputs = decode(source_lang, target_lang, source_sentence,
+                       constraints=target_constraints, n_best=n_best)
 
-        #print "Lock release"
-        #lock.release()
+    target_data_processor = app.processors.get(target_lang, None)
 
-    return jsonify({'ranked_translations': translations})
+    # each output is (seq, score, hypothesis)
+    output_objects = []
+    for seq, score, hyp in best_outputs:
+        # start from 1 to cut off the start symbol (None)
+        span_annotations, raw_hyp = convert_token_annotations_to_spans(seq[1:],
+                                                                       hyp.constraint_indices[1:])
+
+        # WORKING: get the constraint indices from the hypothesis and return these as well
+        # WORKING: now do postprocessing on the sequence and annotations
+        # WORKING: see IMT server for postprocessing logic -- add to DataProcessor below
+        # WORKING: now map constraint indices to post-processed sequence indices
+        detokenized_hyp = target_data_processor.detokenize(raw_hyp)
+        print(u"raw hyp: {}".format(raw_hyp))
+        print(u"detokenized hyp: {}".format(detokenized_hyp))
+
+        output_objects.append({'translation': detokenized_hyp})
 
 
-# TODO: add DataProcessor initialized with all the assets we need for pre-/post- processing
-# TODO: add terminology mapping hooks into Terminology NMT DataProcessor
-# TODO: Map and unmap hooks
-# TODO: remember that placeholder term mapping needs to pass the restore map through to postprocessing
-# TODO: restoring @num@ placeholders with word alignments? -- leave this for last
+    return jsonify({'outputs': output_objects})
+
+
 def decode(source_lang, target_lang, source_sentence, constraints=None, n_best=1, length_factor=1.5, beam_size=5):
     """
     Decode an input sentence
@@ -368,30 +384,13 @@ def decode(source_lang, target_lang, source_sentence, constraints=None, n_best=1
                                                   return_model_scores=False, return_alignments=True,
                                                   length_normalization=True)
 
-    # WORKING: get the constraint indices from the hypothesis and return these as well
-    # TODO: check logic for k-best vs 1-best (sequence vs single obj)
-    best_hyp = best_output[-1]
+    if n_best == 1:
+        best_output = [best_output]
 
-    # start from 1 to cut of the start symbol (None)
-    span_annotations, output_hyp = convert_token_annotations_to_spans(best_output[0][1:],
-                                                                      best_hyp.constraint_indices[1:])
-    import ipdb; ipdb.set_trace()
 
-    if n_best > 1:
-        # start from idx 1 to cut off `None` at the beginning of the sequence
-        # separate each n-best list with newline
-        decoder_output = [u' '.join(s[0][1:]) for s in best_output]
-    else:
-        # start from idx 1 to cut off `None` at the beginning of the sequence
-        decoder_output = [u' '.join(best_output[0][1:])]
+    return best_output
 
-    # Note alignments are always an n-best list (may be n=1)
-    # if write_alignments is not None:
-    #     with codecs.open(write_alignments, 'a+', encoding='utf8') as align_out:
-    #         align_out.write(json.dumps([a.tolist() for a in best_alignments]) + u'\n')
-
-    return decoder_output
-
+    # WORKING HERE: include postprocessing
     # best_n_hyps, best_n_costs, best_n_glimpses, best_n_word_level_costs, best_n_confidences, src_in = predictor.predict_segment(source_sentence, target_prefix=target_prefix,
     #                                                     tokenize=True, detokenize=True, n_best=n_best, max_length=predictor.max_length)
 
