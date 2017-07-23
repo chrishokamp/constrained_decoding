@@ -4,7 +4,7 @@ import codecs
 import re
 from subprocess import Popen, PIPE
 
-from flask import Flask, request, render_template, jsonify, abort
+from flask import Flask, request, jsonify, abort
 
 from constrained_decoding import create_constrained_decoder
 
@@ -71,9 +71,6 @@ def remap_constraint_indices(tokenized_sequence, detokenized_sequence, constrain
 
 
 def convert_token_annotations_to_spans(token_sequence, constraint_annotations):
-    print('len tokens: {}'.format(len(token_sequence)))
-    print('len annotations: {}'.format(len(constraint_annotations)))
-    import ipdb;ipdb.set_trace()
     assert len(token_sequence) == len(constraint_annotations), 'we need one annotation per token for this to make sense'
     # here we are just annotating which spans are constraints, we discard the constraint alignment information
 
@@ -295,7 +292,6 @@ class DataProcessor(object):
 
 # TODO: multiple instances of the same model, delegate via thread queue? -- with Flask this is way too buggy
 # TODO: online updating via cache
-# TODO: require source and target language specification
 @app.route('/translate', methods=['POST'])
 def constrained_decoding_endpoint():
     request_data = request.get_json()
@@ -318,7 +314,7 @@ def constrained_decoding_endpoint():
 
     # Note best_hyps is always a list
     best_outputs = decode(source_lang, target_lang, source_sentence,
-                       constraints=target_constraints, n_best=n_best)
+                          constraints=target_constraints, n_best=n_best)
 
     target_data_processor = app.processors.get(target_lang, None)
 
@@ -336,10 +332,6 @@ def constrained_decoding_endpoint():
         detokenized_span_indices = remap_constraint_indices(tokenized_sequence=raw_hyp,
                                                             detokenized_sequence=detokenized_hyp,
                                                             constraint_indices=span_annotations)
-        # print(u"raw hyp: {}".format(raw_hyp))
-        # print(u"detokenized hyp: {}".format(detokenized_hyp))
-        # print(u"tokenized indices: {}".format(span_annotations))
-        # print(u"detokenized indices: {}".format(detokenized_span_indices))
 
         output_objects.append({'translation': detokenized_hyp,
                                'constraint_annotations': detokenized_span_indices,

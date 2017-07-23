@@ -302,7 +302,7 @@ class ConstrainedDecoder(object):
                length_normalization=True):
         top_row = max(k[1] for k in search_grid.keys())
 
-        if top_row > 1:
+        if top_row > 0:
             output_beams = [search_grid[k] for k in search_grid.keys() if k[1] == top_row]
         else:
             # constraints seq is empty
@@ -320,8 +320,8 @@ class ConstrainedDecoder(object):
             h.true_len = true_len
 
         # if at least one hyp ends with eos, drop all the ones that don't (note this makes some big assumptions)
-        #eos_hyps = [h for h in output_hyps if eos_token in h.sequence]
-        #if len(eos_hyps) > 0:
+        # eos_hyps = [h for h in output_hyps if eos_token in h.sequence]
+        # if len(eos_hyps) > 0:
         #    output_hyps = eos_hyps
 
         # normalizing scores by true_len is optional -- Note: length norm param could also be weighted as in GNMT paper
