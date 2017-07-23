@@ -8,7 +8,9 @@ from flask import Flask, request, render_template, jsonify, abort
 
 from constrained_decoding import create_constrained_decoder
 
+logging.basicConfig()
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 app = Flask(__name__)
 # this needs to be set before we actually run the server
@@ -69,6 +71,9 @@ def remap_constraint_indices(tokenized_sequence, detokenized_sequence, constrain
 
 
 def convert_token_annotations_to_spans(token_sequence, constraint_annotations):
+    print('len tokens: {}'.format(len(token_sequence)))
+    print('len annotations: {}'.format(len(constraint_annotations)))
+    import ipdb;ipdb.set_trace()
     assert len(token_sequence) == len(constraint_annotations), 'we need one annotation per token for this to make sense'
     # here we are just annotating which spans are constraints, we discard the constraint alignment information
 
@@ -294,6 +299,7 @@ class DataProcessor(object):
 @app.route('/translate', methods=['POST'])
 def constrained_decoding_endpoint():
     request_data = request.get_json()
+    logger.info('Request data: {}'.format(request_data))
     source_lang = request_data['source_lang']
     target_lang = request_data['target_lang']
     n_best = request_data.get('n_best', 1)
@@ -316,12 +322,13 @@ def constrained_decoding_endpoint():
 
     target_data_processor = app.processors.get(target_lang, None)
 
-    # each output is (seq, score, hypothesis)
+    # each output is (seq, score, true_len, hypothesis)
     output_objects = []
     for seq, score, hyp in best_outputs:
         # start from 1 to cut off the start symbol (None)
-        span_annotations, raw_hyp = convert_token_annotations_to_spans(seq[1:],
-                                                                       hyp.constraint_indices[1:])
+        true_len = int(hyp.true_len)
+        span_annotations, raw_hyp = convert_token_annotations_to_spans(seq[1:true_len],
+                                                                       hyp.constraint_indices[1:true_len])
 
         detokenized_hyp = target_data_processor.detokenize(raw_hyp)
 
