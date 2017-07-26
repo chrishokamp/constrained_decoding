@@ -219,6 +219,8 @@ class NematusTranslationModel(AbstractConstrainedTM):
                 # Nematus needs encoded utf-8 as input
                 token_seq = token_seq.encode('utf8').split()
 
+            token_seq = [token.encode('utf8') if type(token) is unicode else token for token in token_seq]
+
             assert type(token_seq) is list or type(token_seq) is tuple, 'Constraint token seqs must be lists or tuples'
             # Note: all models share the same output dictionary, so we just use the first one
             token_idxs = [self.word_dicts[0]['output_dict'].get(token, 1) for token in token_seq]

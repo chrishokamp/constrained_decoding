@@ -204,7 +204,7 @@ class DataProcessor(object):
 
     """
 
-    def __init__(self, lang, use_subword=False, subword_codes=None):
+    def __init__(self, lang, use_subword=False, subword_codes=None, escape_special_chars=False, truecase_model=None):
         self.use_subword = use_subword
         if self.use_subword:
             subword_codes_iter = codecs.open(subword_codes, encoding='utf-8')
@@ -219,6 +219,29 @@ class DataProcessor(object):
 
         detokenize_script = os.path.join(os.path.dirname(__file__), 'resources/tokenizer/detokenizer.perl')
         self.detokenizer_cmd = [detokenize_script, '-l', self.lang, '-q', '-']
+
+        self.escape_special_chars = escape_special_chars
+
+        if self.escape_special_chars:
+            escape_special_chars_script = os.path.join(os.path.dirname(__file__),
+                                                       'resources/tokenizer/escape-special-chars.perl')
+            self.escape_special_chars_cmd = [escape_special_chars_script]
+
+            deescape_special_chars_script = os.path.join(os.path.dirname(__file__),
+                                                         'resources/tokenizer/deescape-special-chars.perl')
+            self.deescape_special_chars_cmd = [deescape_special_chars_script]
+
+        self.truecase = False
+        if truecase_model is not None:
+            self.truecase = True
+
+            truecase_script = os.path.join(os.path.dirname(__file__),
+                                           'resources/recaser/truecase.perl')
+            self.truecase_cmd = [truecase_script, '-m', truecase_model]
+
+            detruecase_script = os.path.join(os.path.dirname(__file__),
+                                             'resources/recaser/detruecase.perl')
+            self.detruecase_cmd = [detruecase_script]
 
     def tokenize(self, text):
         if len(text.strip()) == 0:
@@ -236,8 +259,21 @@ class DataProcessor(object):
             segment = self.tokenizer.stdout.readline()
         # read one more line
         _ = self.tokenizer.stdout.readline()
+        segment = segment.rstrip()
 
-        utf_line = segment.rstrip().decode('utf8')
+        if self.escape_special_chars:
+            char_escape = Popen(self.escape_special_chars_cmd, stdin=PIPE, stdout=PIPE)
+            # this script cuts off a whitespace, so we add some extra
+            segment, _ = char_escape.communicate(segment + '   ')
+            segment = segment.rstrip()
+
+        if self.truecase:
+            truecaser = Popen(self.truecase_cmd, stdin=PIPE, stdout=PIPE)
+            # this script cuts off a whitespace, so we add some extra
+            segment, _ = truecaser.communicate(segment + '   ')
+            segment = segment.rstrip()
+
+        utf_line = segment.decode('utf8')
 
         if self.use_subword:
             tokens = self.bpe.segment(utf_line).split()
@@ -267,27 +303,25 @@ class DataProcessor(object):
         utf_line = text.rstrip().decode('utf8')
         return utf_line
 
-    def truecase(self, text):
-        """
-        Truecase a string with this DataProcessor's truecasing model
-
-        Args:
-
-        Returns:
-
-        """
-        pass
+    def deescape_special_chars(self, text):
+        if type(text) is unicode:
+            text = text.encode('utf8')
+        char_deescape = Popen(self.deescape_special_chars_cmd, stdin=PIPE, stdout=PIPE)
+        # this script cuts off a whitespace, so we add some extra
+        text, _ = char_deescape.communicate(text + '   ')
+        text = text.rstrip()
+        utf_line = text.decode('utf8')
+        return utf_line
 
     def detruecase(self, text):
-        """
-        Deruecase a string using moses detruecaser
-
-        Args:
-
-        Returns:
-
-        """
-        pass
+        if type(text) is unicode:
+            text = text.encode('utf8')
+        detruecaser = Popen(self.detruecase_cmd, stdin=PIPE, stdout=PIPE)
+        # this script cuts off a whitespace, so we add some extra
+        text, _ = detruecaser.communicate(text + '   ')
+        text = text.rstrip()
+        utf_line = text.decode('utf8')
+        return utf_line
 
 
 # TODO: multiple instances of the same model, delegate via thread queue? -- with Flask this is way too buggy
@@ -329,15 +363,34 @@ def constrained_decoding_endpoint():
         #logger.info('BEST HYP BEFORE TRUNCATION: {}'.format(hyp.sequence))
         #logger.info('True len: {}'.format(true_len))
         #logger.info('Seq: {}'.format(seq))
+
+        # this is a hack to make sure escaped punctuation gets matched correctly
+        if target_data_processor.escape_special_chars:
+            # detokenized_hyp = target_data_processor.deescape_special_chars(detokenized_hyp)
+            seq = [target_data_processor.deescape_special_chars(tok) if tok is not None else tok
+                   for tok in seq]
+
         span_annotations, raw_hyp = convert_token_annotations_to_spans(seq[1:true_len],
                                                                        hyp.constraint_indices[1:true_len])
 
+
+
+        # detokenization also de-escapes
         detokenized_hyp = target_data_processor.detokenize(raw_hyp)
+
+
+        # WORKING: here we do the punctuation denormalization
+        # WORKING: add html entity mapping into tokenization step of data processor
 
         # map tokenized constraint indices to post-processed sequence indices
         detokenized_span_indices = remap_constraint_indices(tokenized_sequence=raw_hyp,
                                                             detokenized_sequence=detokenized_hyp,
                                                             constraint_indices=span_annotations)
+
+        # finally detruecase
+        if target_data_processor.truecase:
+            detokenized_hyp = target_data_processor.detruecase(detokenized_hyp)
+
 
         output_objects.append({'translation': detokenized_hyp,
                                'constraint_annotations': detokenized_span_indices,
