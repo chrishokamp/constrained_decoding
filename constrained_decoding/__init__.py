@@ -299,7 +299,7 @@ class ConstrainedDecoder(object):
 
     @staticmethod
     def best_n(search_grid, eos_token, n_best=1, cut_off_eos=True, return_model_scores=False, return_alignments=False,
-               length_normalization=True):
+               length_normalization=True, prefer_eos=False):
         top_row = max(k[1] for k in search_grid.keys())
 
         if top_row > 0:
@@ -311,6 +311,13 @@ class ConstrainedDecoder(object):
 
         output_hyps = [h for beam in output_beams for h in beam]
 
+        # if at least one hyp ends with eos, drop all the ones that don't (note this makes some big assumptions)
+        # IDEA: just take the hyps that were _continued_
+        if prefer_eos:
+            eos_hyps = [h for h in output_hyps if eos_token in h.sequence]
+            if len(eos_hyps) > 0:
+               output_hyps = eos_hyps
+
         # getting the true length of each hypothesis
         true_lens = [h.sequence.index(eos_token) if eos_token in h.sequence else len(h.sequence)
                      for h in output_hyps]
@@ -318,11 +325,6 @@ class ConstrainedDecoder(object):
         # hack to let us keep true_len info after sorting
         for h, true_len in zip(output_hyps, true_lens):
             h.true_len = true_len
-
-        # if at least one hyp ends with eos, drop all the ones that don't (note this makes some big assumptions)
-        # eos_hyps = [h for h in output_hyps if eos_token in h.sequence]
-        # if len(eos_hyps) > 0:
-        #    output_hyps = eos_hyps
 
         # normalizing scores by true_len is optional -- Note: length norm param could also be weighted as in GNMT paper
         try:

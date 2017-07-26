@@ -300,6 +300,8 @@ def constrained_decoding_endpoint():
     target_lang = request_data['target_lang']
     n_best = request_data.get('n_best', 1)
 
+    beam_size = 1
+
     if (source_lang, target_lang) not in app.models:
         logger.error('MT Server does not have a model for: {}'.format((source_lang, target_lang)))
         abort(404)
@@ -314,7 +316,7 @@ def constrained_decoding_endpoint():
 
     # Note best_hyps is always a list
     best_outputs = decode(source_lang, target_lang, source_sentence,
-                          constraints=target_constraints, n_best=n_best)
+                          constraints=target_constraints, n_best=n_best, beam_size=beam_size)
 
     target_data_processor = app.processors.get(target_lang, None)
 
@@ -323,6 +325,10 @@ def constrained_decoding_endpoint():
     for seq, score, hyp in best_outputs:
         # start from 1 to cut off the start symbol (None)
         true_len = int(hyp.true_len)
+
+        #logger.info('BEST HYP BEFORE TRUNCATION: {}'.format(hyp.sequence))
+        #logger.info('True len: {}'.format(true_len))
+        #logger.info('Seq: {}'.format(seq))
         span_annotations, raw_hyp = convert_token_annotations_to_spans(seq[1:true_len],
                                                                        hyp.constraint_indices[1:true_len])
 
@@ -341,7 +347,7 @@ def constrained_decoding_endpoint():
     return jsonify({'outputs': output_objects})
 
 
-def decode(source_lang, target_lang, source_sentence, constraints=None, n_best=1, length_factor=1.5, beam_size=5):
+def decode(source_lang, target_lang, source_sentence, constraints=None, n_best=1, length_factor=1.3, beam_size=5):
     """
     Decode an input sentence
 
@@ -380,13 +386,19 @@ def decode(source_lang, target_lang, source_sentence, constraints=None, n_best=1
     start_hyp = model.start_hypothesis(mapped_inputs, input_constraints)
 
     beam_size = max(n_best, beam_size)
+    # TODO -- working: switch to auto-scaling dynamic length factor logic for long constraints
+    max_length = int(round(len(mapped_inputs[0][0]) * length_factor))
+    #logger.info('max_length: {}'.format(max_length))
     search_grid = decoder.search(start_hyp=start_hyp, constraints=input_constraints,
-                                 max_hyp_len=int(round(len(mapped_inputs[0][0]) * length_factor)),
+                                 max_hyp_len=max_length,
                                  beam_size=beam_size)
 
-    best_output, best_alignments = decoder.best_n(search_grid, model.eos_token, n_best=n_best,
-                                                  return_model_scores=False, return_alignments=True,
-                                                  length_normalization=True)
+    best_output, best_alignments = decoder.best_n(search_grid, model.eos_token,
+                                                  n_best=n_best,
+                                                  return_model_scores=False,
+                                                  return_alignments=True,
+                                                  length_normalization=True,
+                                                  prefer_eos=True)
 
     if n_best == 1:
         best_output = [best_output]
@@ -411,5 +423,5 @@ def run_imt_server(models, processors=None, port=5007):
     logger.info('Server starting on port: {}'.format(port))
     # logger.info('navigate to: http://localhost:{}/neural_MT_demo to see the system demo'.format(port))
     # app.run(debug=True, port=port, host='127.0.0.1', threaded=True)
-    app.run(debug=True, port=port, host='127.0.0.1', threaded=False)
+    app.run(debug=False, port=port, host='127.0.0.1', threaded=False)
 

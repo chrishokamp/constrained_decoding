@@ -326,7 +326,6 @@ class NematusTranslationModel(AbstractConstrainedTM):
             else:
                 # hyp.score is None for the start hyp
                 next_score = score
-                model_scores = all_weighted_scores
 
             payload = {
                 'next_states': next_states,
