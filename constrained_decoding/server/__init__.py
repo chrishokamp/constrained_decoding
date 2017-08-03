@@ -16,9 +16,6 @@ app = Flask(__name__)
 # this needs to be set before we actually run the server
 app.models = None
 
-path_to_this_dir = os.path.dirname(os.path.abspath(__file__))
-app.template_folder = os.path.join(path_to_this_dir, 'templates')
-
 
 def remap_constraint_indices(tokenized_sequence, detokenized_sequence, constraint_indices):
     """
