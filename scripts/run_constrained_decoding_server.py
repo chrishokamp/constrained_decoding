@@ -4,7 +4,8 @@ import json
 import codecs
 import argparse
 
-from constrained_decoding.server import DataProcessor, run_imt_server
+from constrained_decoding.server import DataProcessor
+from constrained_decoding.server.nmt_app import run_imt_server
 from constrained_decoding.translation_model.nematus_tm import NematusTranslationModel
 
 
