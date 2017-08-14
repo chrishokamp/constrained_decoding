@@ -311,4 +311,3 @@ class DataProcessor(object):
         utf_line = text.decode('utf8')
         return utf_line
 
-
