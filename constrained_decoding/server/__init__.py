@@ -219,6 +219,18 @@ class DataProcessor(object):
                                                          'resources/tokenizer/deescape-special-chars.perl')
             self.deescape_special_chars_cmd = [deescape_special_chars_script]
 
+        # WORKING: make quicker escape/descape implementation
+        self.special_token_map = {
+                             u'|': u'&#124;',
+                             u'<': u'&lt;',
+                             u'>': u'&gt;',
+                             u'[': u'&bra;',
+                             u']': u'&ket;',
+                             u'"': u'&quot;',
+                             u'\'': u'&apos;',
+                             u'&': u'&amp;'}
+        self.special_token_unmap = {v:k for k,v in self.special_token_map.items()}
+
         self.truecase = False
         if truecase_model is not None:
             self.truecase = True
@@ -250,18 +262,28 @@ class DataProcessor(object):
         segment = segment.rstrip()
 
         if self.escape_special_chars:
-            char_escape = Popen(self.escape_special_chars_cmd, stdin=PIPE, stdout=PIPE)
+            segment = segment.decode('utf8')
+            for k, v in self.special_token_map.items():
+                segment = re.sub(re.escape(k), v, segment)
+            segment.encode('utf8')
+
+            # char_escape = Popen(self.escape_special_chars_cmd, stdin=PIPE, stdout=PIPE)
             # this script cuts off a whitespace, so we add some extra
-            segment, _ = char_escape.communicate(segment + '   ')
-            segment = segment.rstrip()
+            # segment, _ = char_escape.communicate(segment + '   ')
+            # segment = segment.rstrip()
 
         if self.truecase:
-            truecaser = Popen(self.truecase_cmd, stdin=PIPE, stdout=PIPE)
+            # hack to make this faster
+            segment = segment[0].lower() + segment[1:]
+            # truecaser = Popen(self.truecase_cmd, stdin=PIPE, stdout=PIPE)
             # this script cuts off a whitespace, so we add some extra
-            segment, _ = truecaser.communicate(segment + '   ')
-            segment = segment.rstrip()
+            # segment, _ = truecaser.communicate(segment + '   ')
+            # segment = segment.rstrip()
 
-        utf_line = segment.decode('utf8')
+        if type(segment) is not unicode:
+            utf_line = segment.decode('utf8')
+        else:
+            utf_line = segment
 
         if self.use_subword:
             tokens = self.bpe.segment(utf_line).split()
@@ -292,22 +314,30 @@ class DataProcessor(object):
         return utf_line
 
     def deescape_special_chars(self, text):
-        if type(text) is unicode:
-            text = text.encode('utf8')
-        char_deescape = Popen(self.deescape_special_chars_cmd, stdin=PIPE, stdout=PIPE)
+        for k, v in self.special_token_unmap.items():
+            text = re.sub(re.escape(k), v, text)
+
+        # if type(text) is unicode:
+        #     text = text.encode('utf8')
+        # char_deescape = Popen(self.deescape_special_chars_cmd, stdin=PIPE, stdout=PIPE)
         # this script cuts off a whitespace, so we add some extra
-        text, _ = char_deescape.communicate(text + '   ')
-        text = text.rstrip()
-        utf_line = text.decode('utf8')
-        return utf_line
+        # text, _ = char_deescape.communicate(text + '   ')
+        # text = text.rstrip()
+        # utf_line = text.decode('utf8')
+        return text
 
     def detruecase(self, text):
-        if type(text) is unicode:
-            text = text.encode('utf8')
-        detruecaser = Popen(self.detruecase_cmd, stdin=PIPE, stdout=PIPE)
+        # hack to make this faster
+        text = text[0].upper() + text[1:]
+        return text
+
+        # if type(text) is unicode:
+        #     text = text.encode('utf8')
+
+        # detruecaser = Popen(self.detruecase_cmd, stdin=PIPE, stdout=PIPE)
         # this script cuts off a whitespace, so we add some extra
-        text, _ = detruecaser.communicate(text + '   ')
-        text = text.rstrip()
-        utf_line = text.decode('utf8')
-        return utf_line
+        # text, _ = detruecaser.communicate(text + '   ')
+        # text = text.rstrip()
+        # utf_line = text.decode('utf8')
+        # return utf_line
 

@@ -47,13 +47,16 @@ def constrained_decoding_endpoint():
     source_data_processor = app.processors.get(source_lang, None)
     target_data_processor = app.processors.get(target_lang, None)
 
+    logger.info('map source')
     if source_data_processor is not None:
         source_sentence = u' '.join(source_data_processor.tokenize(source_sentence))
 
+    logger.info('map constraints')
     if target_constraints is not None:
         if target_data_processor is not None:
             target_constraints = [target_data_processor.tokenize(c) for c in target_constraints]
 
+    logger.info('decode')
     # Note best_hyps is always a list
     best_outputs = decode(source_sentence,  model, decoder,
                           constraints=target_constraints, n_best=n_best, beam_size=beam_size)
@@ -71,6 +74,7 @@ def constrained_decoding_endpoint():
         #logger.info('Seq: {}'.format(seq))
 
         # this is a hack to make sure escaped punctuation gets matched correctly
+        # Note this is way too slow, we need another solution
         if target_data_processor.escape_special_chars:
             # detokenized_hyp = target_data_processor.deescape_special_chars(detokenized_hyp)
             seq = [target_data_processor.deescape_special_chars(tok) if tok is not None else tok
@@ -91,7 +95,9 @@ def constrained_decoding_endpoint():
 
         # finally detruecase
         if target_data_processor.truecase:
-            detokenized_hyp = target_data_processor.detruecase(detokenized_hyp)
+        #     detokenized_hyp = target_data_processor.detruecase(detokenized_hyp)
+            # just a hack to make sure the capitalization of the mapped target and the original target matches
+            detokenized_hyp = detokenized_hyp[0].upper() + detokenized_hyp[1:]
 
         output_objects.append({'translation': detokenized_hyp,
                                'constraint_annotations': detokenized_span_indices,
@@ -129,7 +135,7 @@ def decode(source_sentence, model, decoder,
     beam_size = max(n_best, beam_size)
     # TODO -- working: switch to auto-scaling dynamic length factor logic for long constraints
     max_length = int(round(len(mapped_inputs[0][0]) * length_factor))
-    #logger.info('max_length: {}'.format(max_length))
+    logger.info('max_length: {}'.format(max_length))
     search_grid = decoder.search(start_hyp=start_hyp, constraints=input_constraints,
                                  max_hyp_len=max_length,
                                  beam_size=beam_size)
