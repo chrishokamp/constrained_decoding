@@ -102,7 +102,7 @@ def run(input_files, constraints_file, output, models, configs, weights,
     for idx, inputs in enumerate(itertools.izip(*input_iters)):
         input_constraints = []
         if constraints is not None:
-            input_constraints = constraints
+            input_constraints = constraints[idx]
 
         # Note: the length_factor is used with the length of the first model input of the ensemble
         # in case the users constraints will go beyond the max length according to length_factor
@@ -112,7 +112,7 @@ def run(input_files, constraints_file, output, models, configs, weights,
             if num_constraint_tokens >= max_hyp_len:
                 logger.warn('The number of tokens in the constraints are greater than max_len*length_factor, ' + \
                             'autoscaling the maximum hypothesis length...')
-                max_hyp_len = num_constraint_tokens + int(round(len(max_hyp_len) / 2))
+                max_hyp_len = num_constraint_tokens + int(round(max_hyp_len / 2))
 
         best_output = decode(decoder, nematus_tm, inputs, n_best,
                              max_hyp_len=max_hyp_len,
