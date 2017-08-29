@@ -54,7 +54,11 @@ def constrained_decoding_endpoint():
     logger.info('map constraints')
     if target_constraints is not None:
         if target_data_processor is not None:
+            # hack to avoid truecasing constraints
+            temp_truecase = target_data_processor.truecase
+            target_data_processor.truecase = False
             target_constraints = [target_data_processor.tokenize(c) for c in target_constraints]
+            target_data_processor.truecase = temp_truecase
 
     logger.info('decode')
     # Note best_hyps is always a list

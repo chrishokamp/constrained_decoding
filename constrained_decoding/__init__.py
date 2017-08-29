@@ -224,7 +224,7 @@ class ConstrainedDecoder(object):
 
         # a beam with one hyp starts the search
         start_beam = self.beam_implementation(size=1)
-        start_beam.add(start_hyp)
+        start_beam.add(start_hyp, beam_constraints=self.beam_constraints)
 
         search_grid[(0, 0)] = start_beam
 
@@ -248,9 +248,9 @@ class ConstrainedDecoder(object):
                     new_constraint_hyps = self.get_new_constraint_hyps(search_grid[(i-1, j-1)])
                     continued_constraint_hyps = self.get_continued_constraint_hyps(search_grid[(i-1, j-1)])
                     for hyp in new_constraint_hyps:
-                        new_beam.add(hyp)
+                        new_beam.add(hyp, beam_constraints=self.beam_constraints)
                     for hyp in continued_constraint_hyps:
-                        new_beam.add(hyp)
+                        new_beam.add(hyp, beam_constraints=self.beam_constraints)
 
                 search_grid[(i,j)] = new_beam
 
