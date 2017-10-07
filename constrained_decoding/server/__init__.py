@@ -3,6 +3,7 @@ import os
 import codecs
 import re
 from subprocess import Popen, PIPE
+from collections import OrderedDict
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -219,16 +220,18 @@ class DataProcessor(object):
                                                          'resources/tokenizer/deescape-special-chars.perl')
             self.deescape_special_chars_cmd = [deescape_special_chars_script]
 
-        # WORKING: make quicker escape/descape implementation
-        self.special_token_map = {
-                             u'|': u'&#124;',
-                             u'<': u'&lt;',
-                             u'>': u'&gt;',
-                             u'[': u'&bra;',
-                             u']': u'&ket;',
-                             u'"': u'&quot;',
-                             u'\'': u'&apos;',
-                             u'&': u'&amp;'}
+        # make quicker escape/descape implementation
+        # Note: it's vital that this is an _ordered_ dict, so that ampersands get replaced first
+        # Note:   otherwise the ampersands in the special chars would get replaced
+        self.special_token_map = OrderedDict([
+            (u'&', u'&amp;'),
+            (u'|', u'&#124;'),
+            (u'<', u'&lt;'),
+            (u'>', u'&gt;'),
+            (u'[', u'&bra;'),
+            (u']', u'&ket;'),
+            (u'"', u'&quot;'),
+            (u'\'', u'&apos;')])
         self.special_token_unmap = {v:k for k,v in self.special_token_map.items()}
 
         self.truecase = False

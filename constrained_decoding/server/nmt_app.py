@@ -32,13 +32,6 @@ def constrained_decoding_endpoint():
     source_sentence = request_data['source_sentence']
     target_constraints = request_data.get('target_constraints', None)
 
-    #logger.info('Acquired lock')
-    #lock.acquire()
-    #print "Lock release"
-    #lock.release()
-
-    # WORKING: move pre-/post-processing here
-    # WORKING: factor out all preprocessing and server-specific logic from this function to make decoding as flexible as possible
     model = app.models[(source_lang, target_lang)]
     decoder = app.decoders[(source_lang, target_lang)]
     # Note: remember we support multiple inputs for each model (i.e. each model may be an ensemble where sub-models
@@ -90,8 +83,7 @@ def constrained_decoding_endpoint():
         # detokenization also de-escapes
         detokenized_hyp = target_data_processor.detokenize(raw_hyp)
 
-        # WORKING: here we do the punctuation denormalization
-        # WORKING: add html entity mapping into tokenization step of data processor
+        # here we do the punctuation denormalization
         # map tokenized constraint indices to post-processed sequence indices
         detokenized_span_indices = remap_constraint_indices(tokenized_sequence=raw_hyp,
                                                             detokenized_sequence=detokenized_hyp,
