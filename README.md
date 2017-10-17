@@ -24,7 +24,7 @@ We assume you've already installed [Theano](http://deeplearning.net/software/the
 and [Nematus](https://github.com/EdinburghNLP/nematus.git).
 
 ``` 
-# CHANGE THIS TO A LOCAL PAT 
+# CHANGE THIS TO A LOCAL PATH 
 EXP_DIR=/data/mt_data/nematus_en-de_example
 
 # Download one of the Edinburgh pre-trained Nematus models from WMT 2016
