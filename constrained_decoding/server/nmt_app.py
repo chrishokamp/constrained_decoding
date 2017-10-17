@@ -32,13 +32,6 @@ def constrained_decoding_endpoint():
     source_sentence = request_data['source_sentence']
     target_constraints = request_data.get('target_constraints', None)
 
-    #logger.info('Acquired lock')
-    #lock.acquire()
-    #print "Lock release"
-    #lock.release()
-
-    # WORKING: move pre-/post-processing here
-    # WORKING: factor out all preprocessing and server-specific logic from this function to make decoding as flexible as possible
     model = app.models[(source_lang, target_lang)]
     decoder = app.decoders[(source_lang, target_lang)]
     # Note: remember we support multiple inputs for each model (i.e. each model may be an ensemble where sub-models
@@ -47,13 +40,20 @@ def constrained_decoding_endpoint():
     source_data_processor = app.processors.get(source_lang, None)
     target_data_processor = app.processors.get(target_lang, None)
 
+    logger.info('map source')
     if source_data_processor is not None:
         source_sentence = u' '.join(source_data_processor.tokenize(source_sentence))
 
+    logger.info('map constraints')
     if target_constraints is not None:
         if target_data_processor is not None:
+            # hack to avoid truecasing constraints
+            temp_truecase = target_data_processor.truecase
+            target_data_processor.truecase = False
             target_constraints = [target_data_processor.tokenize(c) for c in target_constraints]
+            target_data_processor.truecase = temp_truecase
 
+    logger.info('decode')
     # Note best_hyps is always a list
     best_outputs = decode(source_sentence,  model, decoder,
                           constraints=target_constraints, n_best=n_best, beam_size=beam_size)
@@ -71,6 +71,7 @@ def constrained_decoding_endpoint():
         #logger.info('Seq: {}'.format(seq))
 
         # this is a hack to make sure escaped punctuation gets matched correctly
+        # Note this is way too slow, we need another solution
         if target_data_processor.escape_special_chars:
             # detokenized_hyp = target_data_processor.deescape_special_chars(detokenized_hyp)
             seq = [target_data_processor.deescape_special_chars(tok) if tok is not None else tok
@@ -82,8 +83,7 @@ def constrained_decoding_endpoint():
         # detokenization also de-escapes
         detokenized_hyp = target_data_processor.detokenize(raw_hyp)
 
-        # WORKING: here we do the punctuation denormalization
-        # WORKING: add html entity mapping into tokenization step of data processor
+        # here we do the punctuation denormalization
         # map tokenized constraint indices to post-processed sequence indices
         detokenized_span_indices = remap_constraint_indices(tokenized_sequence=raw_hyp,
                                                             detokenized_sequence=detokenized_hyp,
@@ -91,7 +91,9 @@ def constrained_decoding_endpoint():
 
         # finally detruecase
         if target_data_processor.truecase:
-            detokenized_hyp = target_data_processor.detruecase(detokenized_hyp)
+        #     detokenized_hyp = target_data_processor.detruecase(detokenized_hyp)
+            # just a hack to make sure the capitalization of the mapped target and the original target matches
+            detokenized_hyp = detokenized_hyp[0].upper() + detokenized_hyp[1:]
 
         output_objects.append({'translation': detokenized_hyp,
                                'constraint_annotations': detokenized_span_indices,
@@ -129,7 +131,7 @@ def decode(source_sentence, model, decoder,
     beam_size = max(n_best, beam_size)
     # TODO -- working: switch to auto-scaling dynamic length factor logic for long constraints
     max_length = int(round(len(mapped_inputs[0][0]) * length_factor))
-    #logger.info('max_length: {}'.format(max_length))
+    logger.info('max_length: {}'.format(max_length))
     search_grid = decoder.search(start_hyp=start_hyp, constraints=input_constraints,
                                  max_hyp_len=max_length,
                                  beam_size=beam_size)
