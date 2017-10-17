@@ -1,13 +1,5 @@
 """
-Run a Pick-Revise experiment for N cycles, evaluate each file for each cycle
-
-Params
-------
-Source File
-Reference File
-
-Constraint cutoff hyperparams
-
+Extract a PMI terminology from a parallel dataset
 """
 from __future__ import print_function
 
@@ -79,15 +71,15 @@ def prune_high_low_freq(counter, min_occs, max_occs):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-s", "--train_source",
+    parser.add_argument("-s", "--train_source", required=True,
                         help="the source text for the training corpus")
-    parser.add_argument("-t", "--train_target",
+    parser.add_argument("-t", "--train_target", required=True,
                         help="the target text for the training corpus")
-    parser.add_argument("--test_source",
+    parser.add_argument("--test_source", required=True,
                         help="the source data for the test set -- constraints will be extracted for the target side.")
-    parser.add_argument("--min_ngram", type=int,
+    parser.add_argument("--min_ngram", type=int, default=2,
                         help="the minimum ngram length to extract")
-    parser.add_argument("--max_ngram", type=int,
+    parser.add_argument("--max_ngram", type=int, default=5,
                         help="the max ngram length to extract")
     parser.add_argument("--num_segments", type=int, default=100000,
                         help="the maximum number of segments to use from the training data")
@@ -95,7 +87,7 @@ if __name__ == "__main__":
                         help="the minimum number of occurences for a phrase to be considered")
     parser.add_argument("--max_occs", type=int, default=500,
                         help="the maximum number of occurences for a phrase to be considered")
-    parser.add_argument("-o", "--outputdir",
+    parser.add_argument("-o", "--outputdir", required=True,
                         help="the directory where we should write the test set constraints")
 
     args = parser.parse_args()
