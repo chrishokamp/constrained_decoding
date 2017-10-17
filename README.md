@@ -32,12 +32,6 @@ mkdir $EXP_DIR && cd $EXP_DIR
 LANG_PAIR=en-de
 wget -r --cut-dirs=2 -e robots=off -nH -np -R index.html* http://data.statmt.org/rsennrich/wmt16_systems/$LANG_PAIR/
 
-# Download some WMT training data, we'll use this to extract a small terminology to use as constraints
-TERM_DATA=$EXP_DIR/commoncrawl
-mkdir $TERM_DATA && cd $TERM_DATA
-wget http://www.statmt.org/wmt13/training-parallel-commoncrawl.tgz
-tar -xvf training-parallel-commoncrawl.tgz
-
 cd $EXP_DIR
 # get subword-nmt
 git clone https://github.com/rsennrich/subword-nmt
