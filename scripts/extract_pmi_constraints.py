@@ -13,7 +13,7 @@ from collections import Counter, OrderedDict, defaultdict
 
 import numpy
 
-from semantic_annotator.spotting import MatchSpotter
+from constrained_decoding.spotting import MatchSpotter
 
 
 logging.basicConfig()
