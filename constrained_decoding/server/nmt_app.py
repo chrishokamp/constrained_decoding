@@ -1,5 +1,9 @@
 import logging
+import copy
+import json
 from flask import Flask, request, jsonify, abort
+
+import pylru
 
 from constrained_decoding import create_constrained_decoder
 from constrained_decoding.server import convert_token_annotations_to_spans, remap_constraint_indices
@@ -12,6 +16,9 @@ app = Flask(__name__)
 # this needs to be set before we actually run the server
 app.models = None
 
+cache_size = 1000
+app.local_cache = pylru.lrucache(cache_size)
+
 
 # TODO: multiple instances of the same model, delegate via thread queue? -- with Flask this is way too buggy
 # TODO: online updating via cache
@@ -22,7 +29,7 @@ def constrained_decoding_endpoint():
     source_lang = request_data['source_lang']
     target_lang = request_data['target_lang']
     n_best = request_data.get('n_best', 1)
-
+    
     beam_size = 1
 
     if (source_lang, target_lang) not in app.models:
@@ -34,6 +41,14 @@ def constrained_decoding_endpoint():
 
     model = app.models[(source_lang, target_lang)]
     decoder = app.decoders[(source_lang, target_lang)]
+
+    cache_obj = copy.deepcopy(request_data)
+    del cache_obj['request_time']
+    cache_str = json.dumps(cache_obj)
+    if cache_str in app.local_cache:
+        logger.info('Cache hit: {}'.format(cache_str))
+        return app.local_cache[cache_str]
+
     # Note: remember we support multiple inputs for each model (i.e. each model may be an ensemble where sub-models
     # Note: accept different inputs)
 
@@ -99,7 +114,10 @@ def constrained_decoding_endpoint():
                                'constraint_annotations': detokenized_span_indices,
                                'score': score})
 
-    return jsonify({'outputs': output_objects})
+    output_json = jsonify({'outputs': output_objects})
+    app.local_cache[cache_str] = output_json
+
+    return output_json
 
 
 def decode(source_sentence, model, decoder,
