@@ -21,9 +21,18 @@ pip install -e .
 #### Translating with a Nematus Model: A Full Example 
 
 We assume you've already installed [Theano](http://deeplearning.net/software/theano/install_ubuntu.html) 
-and [Nematus](https://github.com/EdinburghNLP/nematus.git).
 
+You need to install the **theano** branch of [Nematus](https://github.com/EdinburghNLP/nematus/tree/theano) 
+```
+git clone https://github.com/EdinburghNLP/nematus.git
+cd nematus
+git checkout theano
+python setup.py install
 ``` 
+
+
+Now download assets and run constrained translation
+```
 # CHANGE THIS TO A LOCAL PATH 
 EXP_DIR=/data/mt_data/nematus_en-de_example
 
